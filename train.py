@@ -1,7 +1,7 @@
 import torch
 
 
-def d2fx(x, f):
+def d2(f, x):
 	df = torch.autograd.grad([f], [x],
 	                         grad_outputs=torch.ones(x.shape, dtype=dtype),
 	                         create_graph=True)[0]
@@ -13,8 +13,8 @@ def d2fx(x, f):
 def hamiltonian(x, y, z, R, psi):
 	r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 	r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
-	return -0.5 * (d2fx(x, psi) + d2fx(y, psi) + d2fx(z, psi)) - (1 / r1 +
-	                                                              1 / r2) * psi
+	return -0.5 * (d2(psi, x) + d2(psi, y) + d2(psi, z)) - (1 / r1 +
+	                                                        1 / r2) * psi
 
 
 class NN_ion(torch.nn.Module):
