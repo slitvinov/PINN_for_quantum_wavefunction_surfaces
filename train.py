@@ -143,15 +143,13 @@ class NN_ion(nn.Module):
 		fi_r = self.sig(fi_r)
 		return fi_r
 
-	def freezeBase(self):
+	def freeze(self):
 		self.Lin_H1.weight.requires_grad = False
 		self.Lin_H1.bias.requires_grad = False
 		self.Lin_H2.weight.requires_grad = False
 		self.Lin_H2.bias.requires_grad = False
 		self.Lin_out.weight.requires_grad = False
 		self.Lin_out.bias.requires_grad = False
-
-	def freezeDecayUnit(self):
 		self.netDecayL.weight.requires_grad = False
 		self.netDecayL.bias.requires_grad = False
 		self.netDecay.weight.requires_grad = False
@@ -162,7 +160,7 @@ class NN_ion(nn.Module):
 		return N, E
 
 	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
-		lam_bc, lam_pde = 1, 1  #lam_tr = 1e-9
+		lam_bc, lam_pde = 1, 1
 		psi, E = self.parametricPsi(x, y, z, R)
 		res = hamiltonian(x, y, z, R, psi) - E * psi
 		LossPDE = (res.pow(2)).mean() * lam_pde
@@ -230,6 +228,5 @@ train()
 
 epochs = 1
 lr = 5e-4
-model.freezeDecayUnit()
-model.freezeBase()
+model.freeze()
 train()
