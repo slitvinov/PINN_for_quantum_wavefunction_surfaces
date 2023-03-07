@@ -12,9 +12,6 @@ def d2(f, x):
 
 
 def train():
-	params = itertools.chain(
-	    *(params.parameters()
-	      for params in [H1, H2, out, E1, E2, Eout, netDecayL, netDecay]))
 	optimizer = torch.optim.Adam(params, lr=lr)
 	for tt in range(epochs):
 		optimizer.zero_grad()
@@ -81,18 +78,12 @@ netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
 epochs = 10
 lr = 8e-3
+params = itertools.chain(
+    *(params.parameters()
+      for params in [H1, H2, out, E1, E2, Eout, netDecayL, netDecay]))
 train()
 
 epochs = 10
 lr = 5e-4
-H1.weight.requires_grad = False
-H1.bias.requires_grad = False
-H2.weight.requires_grad = False
-H2.bias.requires_grad = False
-out.weight.requires_grad = False
-out.bias.requires_grad = False
-netDecayL.weight.requires_grad = False
-netDecayL.bias.requires_grad = False
-netDecay.weight.requires_grad = False
-netDecay.bias.requires_grad = False
+params = itertools.chain(*(params.parameters() for params in [E1, E2, Eout]))
 train()
