@@ -3,7 +3,6 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import grad
-from os import path
 import pickle
 
 class toR(torch.nn.Module):
@@ -22,8 +21,6 @@ class atomicAct_s(torch.nn.Module):
 	def forward(input):
 		return torch.exp(-input)
 
-
-	## Differential Operators using autograd:
 def dfx(x, f):
 	return grad([f], [x],
 	            grad_outputs=torch.ones(x.shape, dtype=dtype),
@@ -37,7 +34,6 @@ def d2fx(x, f):
 
 
 def lapl(x, y, z, f):
-	# Laplacian operator
 	f_xx, f_yy, f_zz = d2fx(x, f), d2fx(y, f), d2fx(z, f)
 	return f_xx + f_yy + f_zz
 
@@ -106,12 +102,9 @@ class NN_ion(nn.Module):
 		e = self.Lin_E2(e)
 		e = self.sig(e)
 		E = self.Lin_Eout(e)
-		## ATOMIC Layer: Radial part and physics-based activation
 		fi_r1, fi_r2 = self.atomicUnit(x, y, z, R)
 		fi_r1m, fi_r2m = self.atomicUnit(-x, y, z, R)
-		## LCAO SOLUTION
 		N_LCAO = self.lcao_solution(fi_r1, fi_r2)
-		## NONLINEAR HIDDEN LAYERS
 		B = self.base(fi_r1, fi_r2) + self.P * self.base(fi_r1m, fi_r2m)
 		NN = self.Lin_out(B)
 		f = self.netDecayL(R)
@@ -124,12 +117,10 @@ class NN_ion(nn.Module):
 	def atomicUnit(self, x, y, z, R):
 		x1 = x - R
 		y1 = y - self.Ry
-		z1 = z - self.Rz  # Cartesian Translation & Scaling:
+		z1 = z - self.Rz
 		rVec1 = torch.cat((x1, y1, z1), 1)
 		r1 = self.toR(rVec1)
 		fi_r1 = self.actAO_s(r1)
-		# s- ATOMIC ORBITAL ACTIVATION
-		# --
 		x2 = x + R
 		y2 = y + self.Ry
 		z2 = z + self.Rz
@@ -138,28 +129,19 @@ class NN_ion(nn.Module):
 		fi_r2 = self.actAO_s(r2)
 		return fi_r1, fi_r2
 
-	def lcao_solution(
-	    self,
-	    fi_r1,
-	    fi_r2,
-	):
-		## LCAO solution: Linear combination
+	def lcao_solution(self, fi_r1, fi_r2):
 		N_LCAO = (fi_r1 + self.P * fi_r2)
 		return N_LCAO
 
 	def base(self, fi_r1, fi_r2):
-		## NONLINEAR HIDDEN LAYERS; Black box
 		fi_r = torch.cat((fi_r1, fi_r2), 1)
 		fi_r = self.Lin_H1(fi_r)
 		fi_r = self.sig(fi_r)
 		fi_r = self.Lin_H2(fi_r)
 		fi_r = self.sig(fi_r)
-		# fi_r = self.Lin_H3(fi_r);         fi_r = self.sig(fi_r)
 		return fi_r
 
 	def freezeBase(self):
-		#         for p in self.parameters():
-		#             p.requires_grad=False
 		self.Lin_H1.weight.requires_grad = False
 		self.Lin_H1.bias.requires_grad = False
 		self.Lin_H2.weight.requires_grad = False
@@ -183,40 +165,23 @@ class NN_ion(nn.Module):
 		self.eval()
 
 	def saveModel(self, optimizer):
-		torch.save(
-		    {
-		        # 'epoch': epoch,
-		        'model_state_dict': self.state_dict(),
-		        'optimizer_state_dict': optimizer.state_dict(),
-		        # 'loss': loss
-		    },
-		    saveModelPath)
+		torch.save({'model_state_dict': self.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),}, saveModelPath)
 
 	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
 		lam_bc, lam_pde = 1, 1  #lam_tr = 1e-9
 		psi, E = self.parametricPsi(x, y, z, R)
-		#--# PDE
 		res = hamiltonian(x, y, z, R, psi) - E * psi
 		LossPDE = (res.pow(2)).mean() * lam_pde
 		Ltot = LossPDE
-		#--# BC
 		Lbc = lam_bc * ((psi[bIndex1].pow(2)).mean() +
 		                (psi[bIndex2].pow(2)).mean())
 		Ltot = LossPDE + Lbc
-		#
-		#--# Trivial
-		# Ltriv = 1/(psi.pow(2)).mean()* lam_tr ;    Ltot = Ltot + Ltriv
 		return Ltot, LossPDE, Lbc, E
 
-
-# ## Training: Helper Function
 def train(loadWeights=False, freezeUnits=False):
 	model = NN_ion()
-	# modelBest=copy.deepcopy(model)
 	optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
 	print('train with Adam')
-	# optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.5)
-	# print('train with SGD')
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
 	                                            step_size=sc_step,
 	                                            gamma=sc_decay)
@@ -227,16 +192,13 @@ def train(loadWeights=False, freezeUnits=False):
 	Lpde_h = np.zeros([total_epochs, 1])
 	Lbc_h = np.zeros([total_epochs, 1])
 	E_h = np.zeros([total_epochs, 1])
-	# Ltr_h = np.zeros([total_epochs,1]); Linv_h= np.zeros([total_epochs,1])
-	## LOADING pre-trained model if PATH file exists and loadWeights=True
-	if path.exists(loadModelPath) and loadWeights == True:
-		print('loading model')
+	if loadWeights == True:
 		model.loadModel()
 	if freezeUnits == True:
 		print('Freezeing Basis unit and Gate')
 		model.freezeDecayUnit()
 		model.freezeBase()
-	n_points = n_train  # the training batch size
+	n_points = n_train
 	x, y, z, R = sampling(n_points)
 	r1, r2 = radial(x, y, z, R)
 	bIndex1 = torch.where(r1 >= BCcutoff)
@@ -252,63 +214,47 @@ def train(loadWeights=False, freezeUnits=False):
 		                                            bIndex1, bIndex2)
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
-		# if  tt < 2001:
-		#     scheduler.step()
-		# keep history
 		Ltot_h[tt] = Ltot.cpu().data.numpy()
 		Lpde_h[tt] = LossPDE.cpu().data.numpy()
 		Lbc_h[tt] = Lbc.cpu().data.numpy()
 		E_h[tt] = E[-1].cpu().data.numpy()
-		# Ltr_h[tt]  = Ltriv.data.numpy();
-		#    Keep the best model (lowest loss). Checking after 50% of the total epochs
 		if tt > 0.5 * epochs and Ltot < Llim:
 			Llim = Ltot
 			model.saveModel(optimizer)
 			optEpoch = tt
 	print('Optimal epoch: ', optEpoch)
-	lossDictionary = {
-	    'Ltot': Ltot_h,
-	    'Lbc': Lbc_h,
-	    'Lpde': Lpde_h,
-	    'Energy': E_h
-	}
 	print('last learning rate: ', scheduler.get_last_lr())
 
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
 boundaries = 18
+
+BCcutoff = 17.5
+cutOff = 0.005
+inversion_symmetry = 1
+loadModelPath = "models/ionHsym.pt"
+lr = 8e-3
+n_test = 80
+n_train = 100000
+RxL = 0.2
+RxR = 4
+Ry = 0
+Rz = 0
+saveModelPath = "models/ionHsym.pt"
+sc_decay = .7
+sc_sampling = 1
+sc_step = 3000
 xL = -boundaries
 xR = boundaries
 yL = -boundaries
 yR = boundaries
 zL = -boundaries
 zR = boundaries
-BCcutoff = 17.5
-RxL = 0.2
-RxR = 4
-Ry = 0
-Rz = 0
-cutOff = 0.005
-saveModelPath = "models/ionHsym.pt"
-loadModelPath = "models/ionHsym.pt"
-sc_step = 3000
-sc_decay = .7  ## WAS 3000
-sc_sampling = 1
-n_train = 100000
-n_test = 80
-epochs = int(5e3)
-lr = 8e-3
-inversion_symmetry = 1
+
 epochs = 1
-nEpoch1 = epochs
-n_train = 100000
 lr = 8e-3
 train(loadWeights=False, freezeUnits=False);
-optEpoch = 3598
-lossPath = "loss_ionH_fineTune.pkl"
-sc_sampling = 1
+
 epochs = 1
-nEpoch2 = epochs
-n_train = 100000
 lr = 5e-4
 train(loadWeights=True, freezeUnits=True);
