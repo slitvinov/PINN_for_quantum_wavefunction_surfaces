@@ -3,14 +3,8 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import grad
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import time
 from os import path
 import pickle
-from scipy.integrate import simps
-import warnings
 def set_params():
 	params = dict()
 	boundaries = 18
@@ -79,9 +73,7 @@ def lapl(x, y, z, f):
 	return f_xx + f_yy + f_zz
 
 
-	## Misc physical functions
 def radial(x, y, z, R, params):
-	# Returns the radial part from cartesian coordinates
 	Rx = R
 	Ry = params['Ry']
 	Rz = params['Rz']
@@ -102,9 +94,7 @@ def hamiltonian(x, y, z, R, psi, params):
 	return -0.5 * laplacian + V(x, y, z, R, params) * psi
 
 
-	## Misc helper functions
-def sampling(params, n_points, linearSampling=False):
-	# Sampling from a 4d space: 3d variable (x,y,z) and 1d parameter (R) space
+def sampling(params, n_points):
 	xR = params['xR']
 	xL = params['xL']
 	yR = params['yR']
@@ -112,20 +102,11 @@ def sampling(params, n_points, linearSampling=False):
 	zR = params['zR']
 	zL = params['zL']
 	cutOff = params['cutOff']
-	if linearSampling == True:
-		x = torch.linspace(xL, xR, n_points, requires_grad=False)
-		y = torch.linspace(yL, yR, n_points, requires_grad=False)
-		z = torch.linspace(zL, zR, n_points, requires_grad=False)
-		R = torch.linspace(params['RxL'],
-		                   params['RxR'],
-		                   n_points,
-		                   requires_grad=False)
-	else:
-		x = (xL - xR) * torch.rand(n_points, 1) + xR
-		y = (yL - yR) * torch.rand(n_points, 1) + yR
-		z = (zL - zR) * torch.rand(n_points, 1) + zR
-		R = (params['RxL'] - params['RxR']) * torch.rand(n_points,
-		                                                 1) + params['RxR']
+	x = (xL - xR) * torch.rand(n_points, 1) + xR
+	y = (yL - yR) * torch.rand(n_points, 1) + yR
+	z = (zL - zR) * torch.rand(n_points, 1) + zR
+	R = (params['RxL'] - params['RxR']) * torch.rand(n_points,
+		                                         1) + params['RxR']
 	r1, r2 = radial(x, y, z, R, params)
 	x[r1 < cutOff] = cutOff
 	x[r2 < cutOff] = cutOff
@@ -143,57 +124,7 @@ def saveLoss(params, lossDictionary):
 		pickle.dump(lossDictionary, f)
 
 
-def returnGate():
-	modelTest = NN_ion(params)
-	modelTest.loadModel(params)
-	R = torch.linspace(params['RxL'],
-	                   params['RxR'],
-	                   params['n_train'],
-	                   requires_grad=False)
-	R = R.reshape(-1, 1)
-	R.requires_grad = True
-	f = modelTest.netDecayL(R)
-	f = modelTest.sig(f)
-	f = modelTest.netDecay(f)
-	return R.cpu().detach().numpy(), f.cpu().detach().numpy()
-
-
-def plotLoss(params, saveFig=True):
-	with open(params['lossPath'], 'rb') as f:
-		loaded_dict = pickle.load(f)
-	plt.figure(figsize=[19, 8])
-	plt.subplot(1, 2, 1)
-	plt.plot(loaded_dict['Ltot'], label='total', linewidth=lineW * 2)
-	plt.plot(loaded_dict['Lpde'], label='pde', linewidth=lineW)
-	plt.plot(loaded_dict['Lbc'], label='bc', linewidth=lineW)
-	plt.ylabel('Loss')
-	plt.xlabel('epochs')
-	plt.axvline(params['epochs'],
-	            c='r',
-	            linestyle='--',
-	            linewidth=lineW * 1.5,
-	            alpha=0.7)
-	plt.yscale('log')
-	plt.legend()
-	plt.subplot(1, 2, 2)
-	plt.plot(loaded_dict['Energy'], '-k', linewidth=lineW)
-	plt.ylabel('Energy')
-	plt.xlabel('epochs')
-	plt.axvline(params['epochs'],
-	            c='r',
-	            linestyle='--',
-	            linewidth=lineW * 1.5,
-	            alpha=0.7)
-	plt.tight_layout()
-	if saveFig == True:
-		plt.savefig('figures/loss_figure.jpg', format='jpg')
-
-
-# ## Network Architecture
-##----------------------- Network Class ---------------------
-# Neural Network Architecture
 class NN_ion(nn.Module):
-
 	def __init__(self,
 	             params,
 	             dense_neurons=16,
@@ -217,7 +148,6 @@ class NN_ion(nn.Module):
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1, bias=True)
 
 	def forward(self, x, y, z, R):
-		## ENERGY PARAMETER
 		e = self.Lin_E1(R)
 		e = self.sig(e)
 		e = self.Lin_E2(e)
@@ -356,16 +286,15 @@ def train(params, loadWeights=False, freezeUnits=False):
 		print('Freezeing Basis unit and Gate')
 		model.freezeDecayUnit()
 		model.freezeBase()
-	TeP0 = time.time()  # for counting the training time
 	n_points = params['n_train']  # the training batch size
-	x, y, z, R = sampling(params, n_points, linearSampling=False)
+	x, y, z, R = sampling(params, n_points)
 	r1, r2 = radial(x, y, z, R, params)
 	bIndex1 = torch.where(r1 >= params['BCcutoff'])
 	bIndex2 = torch.where(r2 >= params['BCcutoff'])
 	for tt in range(epochs):
 		optimizer.zero_grad()
 		if tt % params['sc_sampling'] == 0 and tt < 0.9 * epochs:
-			x, y, z, R = sampling(params, n_points, linearSampling=False)
+			x, y, z, R = sampling(params, n_points)
 			r1, r2 = radial(x, y, z, R, params)
 			bIndex1 = torch.where(r1 >= params['BCcutoff'])
 			bIndex2 = torch.where(r2 >= params['BCcutoff'])
@@ -387,8 +316,6 @@ def train(params, loadWeights=False, freezeUnits=False):
 			model.saveModel(params, optimizer)
 			optEpoch = tt
 	print('Optimal epoch: ', optEpoch)
-	TePf = time.time()
-	runTime = TePf - TeP0
 	lossDictionary = {
 	    'Ltot': Ltot_h,
 	    'Lbc': Lbc_h,
@@ -396,117 +323,21 @@ def train(params, loadWeights=False, freezeUnits=False):
 	    'Energy': E_h
 	}
 	saveLoss(params, lossDictionary)
-	print('Runtime (min): ', runTime / 60)
 	print('last learning rate: ', scheduler.get_last_lr())
-	# return E,R
 
-
-def evaluateMultipleModels(params, Rx_list, plots=False, saveEnergies=False):
-	# params['xL']= -5; params['xR']=  5;
-	params['yL'] = -0
-	params['yR'] = 0
-	params['zL'] = -0
-	params['zR'] = 0
-	x, y, z = sampling(params, params['n_test'], linearSampling=True)
-	e_exact = np.zeros([len(Rx_list), 1])
-	## R ->    [0.4 : 0.1 : 4.0 ]
-	e_exact = [
-	    -1.8, -1.67, -1.55, -1.45, -1.36, -1.28, -1.22, -1.156, -1.10, -1.06,
-	    -1.01, -0.98, -0.94, -0.91, -0.88, -0.86, -0.84, -0.81, -0.80
-	]
-	e_all = np.zeros([len(Rx_list), 1])
-	Etot = np.zeros([len(Rx_list), 1])
-	Etot_exact = np.zeros([len(Rx_list), 1])
-	E_int = np.zeros([len(Rx_list), 1])
-	E_int_L = np.zeros([len(Rx_list), 1])
-	j = 0
-	for r in Rx_list:
-		params['Rx'] = r
-		params['lossPath'] = "data/loss_ionH" + '_R=' + str(round(2 * r,
-		                                                          1)) + '.pkl'
-		params['saveModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
-		                                                            1)) + ".pt"
-		params['loadModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
-		                                                            1)) + ".pt"
-		modelTest = NN_ion(params)
-		modelTest.loadModel(params)
-		psi, E = modelTest.parametricPsi(x, y, z)
-		e_all[j] = E[-1].detach().numpy()
-		# print('Interatomic distance: ', 2*params['Rx'])
-		Etot[j] = E[-1].detach().numpy() + 1 / (2 * r)
-		Etot_exact[j] = e_exact[j] + 1 / (2 * r)
-		if plots == True:
-			plot_psi(params, plotSurf=False)
-			plt.title('r = ' + str(r))
-			plotLoss(params, saveFig=False)
-			plt.title('r = ' + str(r))
-		E_int[j], Eparameter, E_int_L[j] = energy_from_psi(params,
-		                                                   printE=False,
-		                                                   calcLCAO=False)
-		E_int[j] = E_int[j] + 1 / (2 * r)
-		E_int_L[j] = E_int_L[j] + 1 / (2 * r)
-		j += 1
-	if saveEnergies == True:
-		EnergyDictionary = {
-		    'Etot': Etot,
-		    'e_all': e_all,
-		    'Etot_exact': Etot_exact,
-		    'E_int': E_int,
-		    'E_int_L': E_int_L
-		}
-		with open(params['EnergyPath'], 'wb') as f:
-			pickle.dump(EnergyDictionary, f)
-
-
-	# return Etot, e_all, Etot_exact, E_int, E_int_L
-def plot_EforR(params, Rx_list, plotIntegral=False):
-	with open(params['EnergyPath'], 'rb') as f:
-		enr_dic = pickle.load(f)
-	Etot, Etot_exact = enr_dic['Etot'], enr_dic['Etot_exact']
-	E_int, E_int_L = enr_dic['E_int'], enr_dic['E_int_L']
-	# e_all =enr_dic['e_all'],
-	e_lcao, Etot_lcao, R_lcao = LCAO_dispersion()
-	plt.figure(figsize=[12, 8])
-	plt.plot(Rx_list, Etot, 'o-b', label='Network')
-	plt.plot(Rx_list, Etot_exact, '^-k', label='Exact')
-	plt.plot(R_lcao, Etot_lcao, '*-m', label='LCAO', alpha=0.7)
-	if plotIntegral == True:
-		plt.plot(Rx_list, E_int, 'x-g', label='network_integral')
-		# plt.plot(Rx_list ,E_int_L,'*-r',label='LCAO integral', alpha=0.7)
-	plt.legend()
-	# plt.xlim([0.9*min(Rx_list),1.1*max(Rx_list)])
-	plt.xlim([0, 2])
-	plt.ylim([-1, 1])
-	plt.xlabel('Half interatomic distance')
-	plt.ylabel('Energy')
-	plt.tight_layout()
-	# plt.ylim([-2.5,-0.5])
-	plt.savefig('figures/dispersion.jpg', format='jpg')
-
-warnings.filterwarnings('ignore')
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
-lineW = 3
-lineBoxW = 2
 params = set_params()
 params['epochs'] = 1
 nEpoch1 = params['epochs']
 params['n_train'] = 100000
 params['lr'] = 8e-3
-#### ----- Training: Single model ---=---------
 train(params, loadWeights=False);
 optEpoch = 3598
-plotLoss(params, saveFig=False)
-# ### GATE: Network-importance function
-Rg, gate = returnGate()
-plt.plot(Rg, gate, linewidth=lineW)
-# ### Fine tuning
-# params=set_params()
 params['loadModelPath'] = "models/ionHsym.pt"
 params['lossPath'] = "data/loss_ionH_fineTune.pkl"
 params['EnergyPath'] = "data/energy_ionH_fineTune.pkl"
 params['saveModelPath'] = "models/ionHsym_fineTune.pt"
-# params['sc_step'] = 10000; params['sc_decay']=.7
 params['sc_sampling'] = 1
 params['epochs'] = 1
 nEpoch2 = params['epochs']
