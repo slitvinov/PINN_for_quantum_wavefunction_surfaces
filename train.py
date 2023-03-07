@@ -34,11 +34,6 @@ class NN_ion(torch.nn.Module):
 		self.netDecayL = torch.nn.Linear(1, netDecay_neurons)
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
-	def atomicUnit(self, x, y, z, R):
-		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
-		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
-		return torch.exp(-r1), torch.exp(-r2)
-
 	def base(self, fi_r1, fi_r2):
 		fi_r = torch.cat((fi_r1, fi_r2), 1)
 		fi_r = self.Lin_H1(fi_r)
@@ -51,9 +46,12 @@ class NN_ion(torch.nn.Module):
 		e = torch.sigmoid(e)
 		e = self.Lin_E2(e)
 		e = torch.sigmoid(e)
-		fi_r1, fi_r2 = self.atomicUnit(x, y, z, R)
-		fi_r1m, fi_r2m = self.atomicUnit(-x, y, z, R)
-		B = self.base(fi_r1, fi_r2) + self.base(fi_r1m, fi_r2m)
+
+		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
+		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
+		fi_r1, fi_r2 = torch.exp(-r1), torch.exp(-r2)
+		B = self.base(fi_r1, fi_r2) + self.base(fi_r2, fi_r1)
+
 		f = self.netDecayL(R)
 		f = torch.sigmoid(f)
 		psi = self.Lin_out(B) * self.netDecay(f) + fi_r1 + fi_r2
