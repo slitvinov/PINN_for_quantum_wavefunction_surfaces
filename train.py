@@ -57,7 +57,6 @@ BCcutoff = 17.5
 cutOff = 0.005
 L = 18
 lr = 8e-3
-n_test = 80
 n_train = 100000
 RxL = 0.2
 RxR = 4
@@ -71,7 +70,6 @@ out = torch.nn.Linear(dense_neurons, 1)
 E1 = torch.nn.Linear(1, dense_neurons_E)
 E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
 Eout = torch.nn.Linear(dense_neurons_E, 1)
-torch.nn.init.constant_(Eout.bias[0], -1)
 netDecayL = torch.nn.Linear(1, netDecay_neurons)
 netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
