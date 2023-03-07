@@ -339,7 +339,7 @@ class NN_ion(nn.Module):
 		return N, E
 
 	def loadModel(self, params):
-		checkpoint = torch.load(params['loadModelPath'])
+		checkpoint = torch.load(params['loadModelPath'], map_location=torch.device('cpu'))
 		self.load_state_dict(checkpoint['model_state_dict'])
 		self.eval()
 
