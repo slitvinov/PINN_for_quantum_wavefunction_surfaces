@@ -34,13 +34,6 @@ class NN_ion(torch.nn.Module):
 		self.netDecayL = torch.nn.Linear(1, netDecay_neurons)
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
-	def base(self, fi_r1, fi_r2):
-		fi_r = torch.cat((fi_r1, fi_r2), 1)
-		fi_r = self.Lin_H1(fi_r)
-		fi_r = torch.sigmoid(fi_r)
-		fi_r = self.Lin_H2(fi_r)
-		return torch.sigmoid(fi_r)
-
 	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
 		e = self.Lin_E1(R)
 		e = torch.sigmoid(e)
@@ -49,12 +42,13 @@ class NN_ion(torch.nn.Module):
 
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
-		fi_r1, fi_r2 = torch.exp(-r1), torch.exp(-r2)
-		B = self.base(fi_r1, fi_r2) + self.base(fi_r2, fi_r1)
-
+		f1 = torch.exp(-r1)
+		f2 = torch.exp(-r2)
+		ff = torch.cat((f1, f2), 1)
+		B = 2 * torch.sigmoid(self.Lin_H2(torch.sigmoid(self.Lin_H1(ff))))
 		f = self.netDecayL(R)
 		f = torch.sigmoid(f)
-		psi = self.Lin_out(B) * self.netDecay(f) + fi_r1 + fi_r2
+		psi = self.Lin_out(B) * self.netDecay(f) + f1 + f2
 		res = hamiltonian(x, y, z, R, psi) - self.Lin_Eout(e) * psi
 		return (res**2).mean() + (psi[bIndex1]**2).mean() + (psi[bIndex2]**
 		                                                     2).mean()
