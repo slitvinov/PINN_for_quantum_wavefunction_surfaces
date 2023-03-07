@@ -34,25 +34,6 @@ class NN_ion(torch.nn.Module):
 		self.netDecayL = torch.nn.Linear(1, netDecay_neurons)
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
-	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
-		e = self.Lin_E1(R)
-		e = torch.sigmoid(e)
-		e = self.Lin_E2(e)
-		e = torch.sigmoid(e)
-
-		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
-		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
-		f1 = torch.exp(-r1)
-		f2 = torch.exp(-r2)
-		ff = torch.cat((f1, f2), 1)
-		B = 2 * torch.sigmoid(self.Lin_H2(torch.sigmoid(self.Lin_H1(ff))))
-		f = self.netDecayL(R)
-		f = torch.sigmoid(f)
-		psi = self.Lin_out(B) * self.netDecay(f) + f1 + f2
-		res = hamiltonian(x, y, z, R, psi) - self.Lin_Eout(e) * psi
-		return (res**2).mean() + (psi[bIndex1]**2).mean() + (psi[bIndex2]**
-		                                                     2).mean()
-
 
 def train():
 	optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0)
@@ -76,9 +57,20 @@ def train():
 			R.requires_grad = True
 			r1 = (x - R)**2 + y**2 + z**2
 			r2 = (x + R)**2 + y**2 + z**2
-			bIndex1 = torch.where(r1 >= BCcutoff**2)
-			bIndex2 = torch.where(r2 >= BCcutoff**2)
-		Ltot = model.LossFunctions(x, y, z, R, bIndex1, bIndex2)
+			i1 = torch.where(r1 >= BCcutoff**2)
+			i2 = torch.where(r2 >= BCcutoff**2)
+		e = torch.sigmoid(model.Lin_E2(torch.sigmoid(model.Lin_E1(R))))
+		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
+		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
+		f1 = torch.exp(-r1)
+		f2 = torch.exp(-r2)
+		ff = torch.cat((f1, f2), 1)
+		B = 2 * torch.sigmoid(model.Lin_H2(torch.sigmoid(model.Lin_H1(ff))))
+		f = model.netDecayL(R)
+		f = torch.sigmoid(f)
+		psi = model.Lin_out(B) * model.netDecay(f) + f1 + f2
+		res = hamiltonian(x, y, z, R, psi) - model.Lin_Eout(e) * psi
+		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
 		print("%.16e" % Ltot.detach().numpy())
 		optimizer.step()
