@@ -30,20 +30,17 @@ def d2fx(x, f):
 
 def radial(x, y, z, R):
 	Rx = R
-	r1 = torch.sqrt((x - Rx).pow(2) + (y - Ry).pow(2) + (z - Rz).pow(2))
-	r2 = torch.sqrt((x + Rx).pow(2) + (y + Ry).pow(2) + (z + Rz).pow(2))
+	r1 = torch.sqrt((x - Rx)**2 + y**2 + z**2)
+	r2 = torch.sqrt((x + Rx)**2 + y**2 + z**2)
 	return r1, r2
 
 
 def V(x, y, z, R):
 	r1, r2 = radial(x, y, z, R)
-	potential = -1 / r1 - 1 / r2
-	return potential
-
+	return -1 / r1 - 1 / r2
 
 def hamiltonian(x, y, z, R, psi):
-	laplacian = d2fx(x, psi) + d2fx(y, psi) + d2fx(z, psi)
-	return -0.5 * laplacian + V(x, y, z, R) * psi
+	return -0.5 * (d2fx(x, psi) + d2fx(y, psi) + d2fx(z, psi)) + V(x, y, z, R) * psi
 
 
 def sampling(n_points):
@@ -80,8 +77,6 @@ class NN_ion(torch.nn.Module):
 		self.Lin_E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
 		self.Lin_Eout = torch.nn.Linear(dense_neurons_E, 1)
 		torch.nn.init.constant_(self.Lin_Eout.bias[0], -1)
-		self.Ry = Ry
-		self.Rz = Rz
 		self.P = inversion_symmetry
 		self.netDecayL = torch.nn.Linear(1, netDecay_neurons, bias=True)
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1, bias=True)
@@ -105,16 +100,10 @@ class NN_ion(torch.nn.Module):
 		return Nout, E
 
 	def atomicUnit(self, x, y, z, R):
-		x1 = x - R
-		y1 = y - self.Ry
-		z1 = z - self.Rz
-		rVec1 = torch.cat((x1, y1, z1), 1)
+		rVec1 = torch.cat((x - R, y, z), 1)
 		r1 = self.toR(rVec1)
 		fi_r1 = self.actAO_s(r1)
-		x2 = x + R
-		y2 = y + self.Ry
-		z2 = z + self.Rz
-		rVec2 = torch.cat((x2, y2, z2), 1)
+		rVec2 = torch.cat((x + R, y, z), 1)
 		r2 = self.toR(rVec2)
 		fi_r2 = self.actAO_s(r2)
 		return fi_r1, fi_r2
@@ -171,8 +160,6 @@ n_test = 80
 n_train = 100000
 RxL = 0.2
 RxR = 4
-Ry = 0
-Rz = 0
 sc_decay = .7
 sc_sampling = 1
 sc_step = 3000
