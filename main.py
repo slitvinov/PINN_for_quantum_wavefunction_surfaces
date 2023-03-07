@@ -11,24 +11,6 @@ from os import path
 import pickle
 from scipy.integrate import simps
 import warnings
-warnings.filterwarnings('ignore')
-dtype = torch.double
-torch.set_default_tensor_type('torch.DoubleTensor')
-lineW = 3
-lineBoxW = 2
-font = {'size': 18}
-matplotlib.rc('font', **font)
-plt.rcParams['font.size'] = 28
-plt.rcParams['lines.markersize'] = 12
-plt.rcParams.update({"text.usetex": True})
-if torch.cuda.is_available():
-	device = torch.device("cuda:0")
-	print('Using ', device, ': ', torch.cuda.get_device_name())
-	torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-else:
-	device = torch.device('cpu')
-	torch.set_default_tensor_type('torch.DoubleTensor')
-	print('No GPU found, using cpu')
 def set_params():
 	params = dict()
 	boundaries = 18
@@ -445,36 +427,6 @@ def train(params, loadWeights=False, freezeUnits=False):
 	# return E,R
 
 
-# ## Training
-#
-params = set_params()
-params['epochs'] = int(5e3)
-nEpoch1 = params['epochs']
-params['n_train'] = 100000
-params['lr'] = 8e-3
-#### ----- Training: Single model ---=---------
-# train(params, loadWeights=False);
-optEpoch = 3598
-plotLoss(params, saveFig=False)
-# ### GATE: Network-importance function
-Rg, gate = returnGate()
-plt.plot(Rg, gate, linewidth=lineW)
-# ### Fine tuning
-# params=set_params()
-params['loadModelPath'] = "models/ionHsym.pt"
-params['lossPath'] = "data/loss_ionH_fineTune.pkl"
-params['EnergyPath'] = "data/energy_ionH_fineTune.pkl"
-params['saveModelPath'] = "models/ionHsym_fineTune.pt"
-# params['sc_step'] = 10000; params['sc_decay']=.7
-params['sc_sampling'] = 1
-params['epochs'] = int(2e3)
-nEpoch2 = params['epochs']
-params['n_train'] = 100000
-params['lr'] = 5e-4
-# train(params, loadWeights=True, freezeUnits=True);
-plotLoss(params, saveFig=False)
-
-
 # # ANALYSIS
 # params['loadModelPath']="models/ionHsym_fineTune.pt"
 # modelTest = NN_ion(params);     modelTest.loadModel(params)
@@ -572,6 +524,433 @@ def load_E_R(params):
 	return E_int, E_lcao, rE, E_net
 
 
+def psi3d(Ri, detachAll=True):
+	modelTest = NN_ion(params)
+	modelTest.loadModel(params)
+	modelTest = modelTest.cpu()
+	x, y, z, Rt = sampling(params, params['n_test'], linearSampling=True)
+	x = x.cpu()
+	y = y.cpu()
+	z = z.cpu()
+	x = x.ravel()
+	y = y.ravel()
+	z = z.ravel()
+	xg, yg, zg = torch.meshgrid(x, y, z)
+	xgg = xg.reshape(-1, 1)
+	ygg = yg.reshape(-1, 1)
+	zgg = zg.reshape(-1, 1)
+	Rt = Ri * torch.ones_like(xgg)
+	# NEURAL PSI
+	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
+	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
+	# LCAO
+	fi_r1, fi_r2 = modelTest.atomicUnit(xgg, ygg, zgg, Rt)
+	psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
+	psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
+	                       params['n_test'])
+	if detachAll:
+		x, y, z = x.detach().numpy(), y.detach().numpy(), z.detach().numpy(),
+		psi, psi_L = psi.detach().numpy(), psi_L.detach().numpy()
+	return x, y, z, psi, psi_L
+
+
+def psiX(Ri):
+	x, y, z, psi, psi_L = psi3d(Ri)
+	cN = int(params['n_test'] / 2)
+	ps2 = (psi[:, :, cN])
+	psiCut = ps2[:, cN].reshape(-1, 1)
+	ps2_L = (psi_L[:, :, cN])
+	ps2_LCut = (ps2_L[:, cN]).reshape(-1, 1)
+	return x, psiCut, ps2_LCut
+
+
+def psi3d_norm(Ri, densePoints, dense_sampling=False, detachAll=True):
+	modelTest = NN_ion(params)
+	modelTest.loadModel(params)
+	modelTest = modelTest.cpu()
+	x, y, z, Rt = sampling(params, params['n_test'], linearSampling=True)
+	x = x.cpu()
+	y = y.cpu()
+	z = z.cpu()
+	x = x.ravel()
+	y = y.ravel()
+	z = z.ravel()
+	xg, yg, zg = torch.meshgrid(x, y, z)
+	xgg = xg.reshape(-1, 1)
+	ygg = yg.reshape(-1, 1)
+	zgg = zg.reshape(-1, 1)
+	Rt = Ri * torch.ones_like(xgg)
+	# NEURAL PSI
+	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
+	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
+	# LCAO
+	fi_r1, fi_r2 = modelTest.atomicUnit(xgg, ygg, zgg, Rt)
+	psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
+	psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
+	                       params['n_test'])
+	Npsi = 1 / np.sqrt(integra3d(x, y, z, (psi).pow(2)))
+	Npsi_L = 1 / np.sqrt(integra3d(x, y, z, (psi_L).pow(2)))
+	if dense_sampling:
+		# nTest_ = params['n_test']
+		params['n_test'] = densePoints
+		x, y, z, Rt = sampling(params, params['n_test'], linearSampling=True)
+		x = x.cpu()
+		y = y.cpu()
+		z = z.cpu()
+		x = x.ravel()
+		y = y.ravel()
+		z = z.ravel()
+		xg, yg, zg = torch.meshgrid(x, y, z)
+		xgg = xg.reshape(-1, 1)
+		ygg = yg.reshape(-1, 1)
+		zgg = zg.reshape(-1, 1)
+		Rt = Ri * torch.ones_like(xgg)
+		# NEURAL PSI
+		psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
+		psi = psi_.reshape(params['n_test'], params['n_test'],
+		                   params['n_test'])
+		# LCAO
+		fi_r1, fi_r2 = modelTest.atomicUnit(xgg, ygg, zgg, Rt)
+		psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
+		psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
+		                       params['n_test'])
+	psi = psi * Npsi
+	psi_L = psi_L * Npsi_L
+	if detachAll:
+		x, y, z = x.detach().numpy(), y.detach().numpy(), z.detach().numpy(),
+		psi, psi_L = psi.detach().numpy(), psi_L.detach().numpy()
+	return x, y, z, psi, psi_L
+
+
+def psiX_norm(Ri, dense_sampling=False, densePoints=200):
+	x, y, z, psi, psi_L = psi3d_norm(Ri, densePoints, dense_sampling)
+	cN = int(params['n_test'] / 2)
+	ps2 = (psi[:, :, cN])
+	psiCut = ps2[:, cN].reshape(-1, 1)
+	ps2_L = (psi_L[:, :, cN])
+	ps2_LCut = (ps2_L[:, cN]).reshape(-1, 1)
+	return x, psiCut, ps2_LCut
+
+# # Hellmann-Feynman theorem
+def hamiltonian_R(x, y, z, R, psi, params):
+	r1, r2 = radial(x, y, z, R, params)
+	# V = -1/r1 -1/r2
+	# VR = grad([V], [R], grad_outputs=torch.ones(R.shape, dtype=dtype), create_graph=True)[0]
+	VR = -(x - R) / r1.pow(3) + (x + R) / r2.pow(3)
+	return VR * psi
+
+
+def dEdR_int(Ri, params):
+	modelTest = NN_ion(params)
+	modelTest.loadModel(params)
+	x, y, z, R = sampling(params, params['n_test'], linearSampling=True)
+	x = x.ravel()
+	y = y.ravel()
+	z = z.ravel()
+	xg, yg, zg = torch.meshgrid(x, y, z)
+	xgg = xg.reshape(-1, 1)
+	ygg = yg.reshape(-1, 1)
+	zgg = zg.reshape(-1, 1)
+	Rt = Ri * torch.ones_like(xgg)
+	# Rt.requires_grad=True
+	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
+	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
+	Npsi = 1 / np.sqrt(integra3d(x.cpu(), y.cpu(), z.cpu(),
+	                             (psi.cpu()).pow(2)))
+	psi = Npsi * psi
+	psi_ = Npsi * psi_
+	hR_psi = hamiltonian_R(xgg, ygg, zgg, Rt, psi_, params)
+	x = x.cpu()
+	y = y.cpu()
+	z = z.cpu()
+	psi = psi.cpu()
+	hR_psi = hR_psi.cpu()
+	hR_psi = hR_psi.reshape(params['n_test'], params['n_test'],
+	                        params['n_test'])
+	dE_integral = integra3d(x, y, z, psi * hR_psi)
+	dE_integral = dE_integral - 1 / (2 * Ri**2)
+	return dE_integral
+
+
+# # END
+def energy_from_psi(params, printE=False, calcLCAO=False):
+	max_d = 7
+	params['xL'] = -max_d
+	params['xR'] = max_d
+	params['zL'] = -max_d
+	params['zR'] = max_d
+	params['yL'] = -max_d
+	params['yR'] = max_d
+	modelTest = NN_ion(params)
+	modelTest.loadModel(params)
+	x, y, z = sampling(params, params['n_test'], linearSampling=True)
+	x = x.ravel()
+	y = y.ravel()
+	z = z.ravel()
+	xg, yg, zg = torch.meshgrid(x, y, z)
+	xgg = xg.reshape(-1, 1)
+	ygg = yg.reshape(-1, 1)
+	zgg = zg.reshape(-1, 1)
+	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg)
+	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
+	# # Energy from psi
+	h_psi = hamiltonian(xgg, ygg, zgg, psi_, params)
+	h_psi = h_psi.reshape(params['n_test'], params['n_test'], params['n_test'])
+	E_integral = integra3d(x, y, z, psi * h_psi) / integra3d(
+	    x, y, z, (psi).pow(2))
+	Eparameter = E[-1].detach().numpy()
+	#############
+	## LCAO
+	#############
+	E_integral_lcao = 0
+	if calcLCAO == True:
+		fi_r1, fi_r2 = modelTest.atomicUnit((xgg), ygg, zgg)
+		psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
+		psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
+		                       params['n_test'])
+		h_psi_L = hamiltonian(xgg, ygg, zgg, psi_L_, params)
+		h_psi_L = h_psi_L.reshape(params['n_test'], params['n_test'],
+		                          params['n_test'])
+		E_integral_lcao = integra3d(x, y, z, psi_L * h_psi_L) / integra3d(
+		    x, y, z, psi_L.pow(2))
+	if printE == True:
+		print('E_integral = ', E_integral)
+		print('E_param = ', Eparameter)
+		print('E_exac = ', -1.452)
+		print('E_lcao_daniel = ', -1.288)
+		print('E_integral_LCAO = ', E_integral_lcao)
+	return E_integral, Eparameter, E_integral_lcao
+
+
+def plot_psi(params, plotSurf=False, saveFig=False):
+	modelTest = NN_ion(params)
+	modelTest.loadModel(params)
+	x, y, z = sampling(params, params['n_test'], linearSampling=True)
+	x = x.ravel()
+	y = y.ravel()
+	z = z.ravel()
+	xg, yg, zg = torch.meshgrid(x, y, z)
+	xgg = xg.reshape(-1, 1)
+	ygg = yg.reshape(-1, 1)
+	zgg = zg.reshape(-1, 1)
+	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg)
+	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
+	psi = psi.cpu()
+	xgg = xgg.cpu()
+	ygg = ygg.cpu()
+	zgg = zgg.cpu()
+	xg = xg.cpu()
+	yg = yg.cpu()
+	zg = zg.cpu()
+	x = x.cpu()
+	y = y.cpu()
+	z = z.cpu()
+	psi = psi / np.sqrt(integra3d(x, y, z, (psi).pow(2)))
+	# print('Normalization of psi')
+	# LCAO
+	fi_r1, fi_r2 = modelTest.atomicUnit((xgg), ygg, zgg)
+	psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
+	# r1,r2 = radial(xgg, ygg, zgg,params)
+	# psi_L_ = torch.exp(-r1) + torch.exp(-r2)
+	psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
+	                       params['n_test'])
+	psi_L = psi_L / np.sqrt(integra3d(x, y, z, (psi_L).pow(2)))
+	# print('Normalization of psi LCAO')
+	cN = int(params['n_test'] / 2)
+	# print('z_cut = ', zg[0,0,cN], 'y_cut = ', yg[0,cN,0])
+	gx = xg[:, :, cN].detach().numpy()
+	gy = yg[:, :, cN].detach().numpy()
+	#gz = zg[:,cN,:].detach().numpy()
+	ps2 = (psi[:, :, cN])
+	psiCut = ps2[:, cN].reshape(-1, 1)
+	ps2_L = (psi_L[:, :, cN])
+	ps2_LCut = (ps2_L[:, cN]).reshape(-1, 1)
+	# res = hamiltonian(x,y,z, psiCut.squeeze(), params) - E[-1]*psiCut.squeeze()
+	# res_L = hamiltonian(x,y,z, ps2_LCut.squeeze(), params) + 1.288*ps2_LCut.squeeze()
+	ps2 = ps2.detach().numpy()
+	psiCut = psiCut.pow(2).detach().numpy()
+	ps2_L = ps2_L.detach().numpy()
+	ps2_LCut = ps2_LCut.pow(2).detach().numpy()
+	fig, ax = plt.subplots(3, sharex=True, figsize=[8, 12])
+	ax[0].contourf(gx, gy, ps2, 100, vmin=ps2.min(), vmax=ps2.max())
+	ax[0].set_ylabel('$y$')
+	# ax[0].set_xlabel('$x$')
+	ax[1].plot(x.detach().numpy(), psiCut, 'b', label='NN')
+	ax[1].plot(x.detach().numpy(), ps2_LCut, 'r', label='LCAO')
+	ax[1].set_xlabel('$x$')
+	ax[1].legend()
+	ax[2].plot(x.detach().numpy(), psiCut - ps2_LCut, 'k')
+	ax[2].set_xlabel('$x$')
+	ax[2].set_ylabel('$NN-LCAO$')
+	# ax[3].plot(x.detach().numpy(), res.detach().numpy(),'b',label='NN')
+	# ax[3].plot(x.detach().numpy(), res_L.detach().numpy(),'r',label='LCAO')
+	# ax[3].set_xlabel('$x$'); ax[3].set_ylabel('$Residuals$')
+	fig.tight_layout()
+	if saveFig == True:
+		fig.savefig('figures/solution_figure.jpg', format='jpg')
+	fig.tight_layout()
+	if plotSurf == True:
+		from matplotlib import cm
+		fig, ax = plt.subplots(1, subplot_kw={"projection": "3d"})
+		ax.plot_surface(gx,
+		                gy,
+		                ps2,
+		                cmap=cm.coolwarm,
+		                linewidth=0,
+		                antialiased=True)
+		fig, ax = plt.subplots(1, subplot_kw={"projection": "3d"})
+		ax.plot_surface(gx,
+		                gy,
+		                ps2_L,
+		                cmap=cm.coolwarm,
+		                linewidth=0,
+		                antialiased=True)
+		if saveFig == True:
+			fig.savefig('figures/surfacePlot_figure.jpg', format='jpg')
+
+
+def trainMultipleModels(params, Rx_list):
+	print('TRAIN MANY MODELS')
+	for r in Rx_list:
+		print('\n R = ', 2 * r)
+		params['Rx'] = r
+		params['lossPath'] = "data/loss_ionH" + '_R=' + str(round(2 * r,
+		                                                          1)) + '.pkl'
+		params['saveModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
+		                                                            1)) + ".pt"
+		params['loadModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
+		                                                            1)) + ".pt"
+		train(params, loadWeights=False)
+
+
+def evaluateMultipleModels(params, Rx_list, plots=False, saveEnergies=False):
+	# params['xL']= -5; params['xR']=  5;
+	params['yL'] = -0
+	params['yR'] = 0
+	params['zL'] = -0
+	params['zR'] = 0
+	x, y, z = sampling(params, params['n_test'], linearSampling=True)
+	e_exact = np.zeros([len(Rx_list), 1])
+	## R ->    [0.4 : 0.1 : 4.0 ]
+	e_exact = [
+	    -1.8, -1.67, -1.55, -1.45, -1.36, -1.28, -1.22, -1.156, -1.10, -1.06,
+	    -1.01, -0.98, -0.94, -0.91, -0.88, -0.86, -0.84, -0.81, -0.80
+	]
+	e_all = np.zeros([len(Rx_list), 1])
+	Etot = np.zeros([len(Rx_list), 1])
+	Etot_exact = np.zeros([len(Rx_list), 1])
+	E_int = np.zeros([len(Rx_list), 1])
+	E_int_L = np.zeros([len(Rx_list), 1])
+	j = 0
+	for r in Rx_list:
+		params['Rx'] = r
+		params['lossPath'] = "data/loss_ionH" + '_R=' + str(round(2 * r,
+		                                                          1)) + '.pkl'
+		params['saveModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
+		                                                            1)) + ".pt"
+		params['loadModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
+		                                                            1)) + ".pt"
+		modelTest = NN_ion(params)
+		modelTest.loadModel(params)
+		psi, E = modelTest.parametricPsi(x, y, z)
+		e_all[j] = E[-1].detach().numpy()
+		# print('Interatomic distance: ', 2*params['Rx'])
+		Etot[j] = E[-1].detach().numpy() + 1 / (2 * r)
+		Etot_exact[j] = e_exact[j] + 1 / (2 * r)
+		if plots == True:
+			plot_psi(params, plotSurf=False)
+			plt.title('r = ' + str(r))
+			plotLoss(params, saveFig=False)
+			plt.title('r = ' + str(r))
+		E_int[j], Eparameter, E_int_L[j] = energy_from_psi(params,
+		                                                   printE=False,
+		                                                   calcLCAO=False)
+		E_int[j] = E_int[j] + 1 / (2 * r)
+		E_int_L[j] = E_int_L[j] + 1 / (2 * r)
+		j += 1
+	if saveEnergies == True:
+		EnergyDictionary = {
+		    'Etot': Etot,
+		    'e_all': e_all,
+		    'Etot_exact': Etot_exact,
+		    'E_int': E_int,
+		    'E_int_L': E_int_L
+		}
+		with open(params['EnergyPath'], 'wb') as f:
+			pickle.dump(EnergyDictionary, f)
+
+
+	# return Etot, e_all, Etot_exact, E_int, E_int_L
+def plot_EforR(params, Rx_list, plotIntegral=False):
+	with open(params['EnergyPath'], 'rb') as f:
+		enr_dic = pickle.load(f)
+	Etot, Etot_exact = enr_dic['Etot'], enr_dic['Etot_exact']
+	E_int, E_int_L = enr_dic['E_int'], enr_dic['E_int_L']
+	# e_all =enr_dic['e_all'],
+	e_lcao, Etot_lcao, R_lcao = LCAO_dispersion()
+	plt.figure(figsize=[12, 8])
+	plt.plot(Rx_list, Etot, 'o-b', label='Network')
+	plt.plot(Rx_list, Etot_exact, '^-k', label='Exact')
+	plt.plot(R_lcao, Etot_lcao, '*-m', label='LCAO', alpha=0.7)
+	if plotIntegral == True:
+		plt.plot(Rx_list, E_int, 'x-g', label='network_integral')
+		# plt.plot(Rx_list ,E_int_L,'*-r',label='LCAO integral', alpha=0.7)
+	plt.legend()
+	# plt.xlim([0.9*min(Rx_list),1.1*max(Rx_list)])
+	plt.xlim([0, 2])
+	plt.ylim([-1, 1])
+	plt.xlabel('Half interatomic distance')
+	plt.ylabel('Energy')
+	plt.tight_layout()
+	# plt.ylim([-2.5,-0.5])
+	plt.savefig('figures/dispersion.jpg', format='jpg')
+
+warnings.filterwarnings('ignore')
+dtype = torch.double
+torch.set_default_tensor_type('torch.DoubleTensor')
+lineW = 3
+lineBoxW = 2
+font = {'size': 18}
+matplotlib.rc('font', **font)
+plt.rcParams['font.size'] = 28
+plt.rcParams['lines.markersize'] = 12
+plt.rcParams.update({"text.usetex": True})
+if torch.cuda.is_available():
+	device = torch.device("cuda:0")
+	print('Using ', device, ': ', torch.cuda.get_device_name())
+	torch.set_default_tensor_type(torch.cuda.DoubleTensor)
+else:
+	device = torch.device('cpu')
+	torch.set_default_tensor_type('torch.DoubleTensor')
+	print('No GPU found, using cpu')
+# ## Training
+#
+params = set_params()
+params['epochs'] = int(5e3)
+nEpoch1 = params['epochs']
+params['n_train'] = 100000
+params['lr'] = 8e-3
+#### ----- Training: Single model ---=---------
+# train(params, loadWeights=False);
+optEpoch = 3598
+plotLoss(params, saveFig=False)
+# ### GATE: Network-importance function
+Rg, gate = returnGate()
+plt.plot(Rg, gate, linewidth=lineW)
+# ### Fine tuning
+# params=set_params()
+params['loadModelPath'] = "models/ionHsym.pt"
+params['lossPath'] = "data/loss_ionH_fineTune.pkl"
+params['EnergyPath'] = "data/energy_ionH_fineTune.pkl"
+params['saveModelPath'] = "models/ionHsym_fineTune.pt"
+# params['sc_step'] = 10000; params['sc_decay']=.7
+params['sc_sampling'] = 1
+params['epochs'] = int(2e3)
+nEpoch2 = params['epochs']
+params['n_train'] = 100000
+params['lr'] = 5e-4
+# train(params, loadWeights=True, freezeUnits=True);
+plotLoss(params, saveFig=False)
 # ### COMPUTE AND SAVE E(R)
 # params['n_test']=50
 # params['loadModelPath']="models/ionHsym_fineTune.pt"
@@ -691,116 +1070,6 @@ plt.yscale('log')
 plt.legend(frameon=False)
 plt.tight_layout()
 plt.savefig('loss_figure.pdf', format='pdf')
-
-
-def psi3d(Ri, detachAll=True):
-	modelTest = NN_ion(params)
-	modelTest.loadModel(params)
-	modelTest = modelTest.cpu()
-	x, y, z, Rt = sampling(params, params['n_test'], linearSampling=True)
-	x = x.cpu()
-	y = y.cpu()
-	z = z.cpu()
-	x = x.ravel()
-	y = y.ravel()
-	z = z.ravel()
-	xg, yg, zg = torch.meshgrid(x, y, z)
-	xgg = xg.reshape(-1, 1)
-	ygg = yg.reshape(-1, 1)
-	zgg = zg.reshape(-1, 1)
-	Rt = Ri * torch.ones_like(xgg)
-	# NEURAL PSI
-	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
-	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
-	# LCAO
-	fi_r1, fi_r2 = modelTest.atomicUnit(xgg, ygg, zgg, Rt)
-	psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
-	psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
-	                       params['n_test'])
-	if detachAll:
-		x, y, z = x.detach().numpy(), y.detach().numpy(), z.detach().numpy(),
-		psi, psi_L = psi.detach().numpy(), psi_L.detach().numpy()
-	return x, y, z, psi, psi_L
-
-
-def psiX(Ri):
-	x, y, z, psi, psi_L = psi3d(Ri)
-	cN = int(params['n_test'] / 2)
-	ps2 = (psi[:, :, cN])
-	psiCut = ps2[:, cN].reshape(-1, 1)
-	ps2_L = (psi_L[:, :, cN])
-	ps2_LCut = (ps2_L[:, cN]).reshape(-1, 1)
-	return x, psiCut, ps2_LCut
-
-
-def psi3d_norm(Ri, densePoints, dense_sampling=False, detachAll=True):
-	modelTest = NN_ion(params)
-	modelTest.loadModel(params)
-	modelTest = modelTest.cpu()
-	x, y, z, Rt = sampling(params, params['n_test'], linearSampling=True)
-	x = x.cpu()
-	y = y.cpu()
-	z = z.cpu()
-	x = x.ravel()
-	y = y.ravel()
-	z = z.ravel()
-	xg, yg, zg = torch.meshgrid(x, y, z)
-	xgg = xg.reshape(-1, 1)
-	ygg = yg.reshape(-1, 1)
-	zgg = zg.reshape(-1, 1)
-	Rt = Ri * torch.ones_like(xgg)
-	# NEURAL PSI
-	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
-	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
-	# LCAO
-	fi_r1, fi_r2 = modelTest.atomicUnit(xgg, ygg, zgg, Rt)
-	psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
-	psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
-	                       params['n_test'])
-	Npsi = 1 / np.sqrt(integra3d(x, y, z, (psi).pow(2)))
-	Npsi_L = 1 / np.sqrt(integra3d(x, y, z, (psi_L).pow(2)))
-	if dense_sampling:
-		# nTest_ = params['n_test']
-		params['n_test'] = densePoints
-		x, y, z, Rt = sampling(params, params['n_test'], linearSampling=True)
-		x = x.cpu()
-		y = y.cpu()
-		z = z.cpu()
-		x = x.ravel()
-		y = y.ravel()
-		z = z.ravel()
-		xg, yg, zg = torch.meshgrid(x, y, z)
-		xgg = xg.reshape(-1, 1)
-		ygg = yg.reshape(-1, 1)
-		zgg = zg.reshape(-1, 1)
-		Rt = Ri * torch.ones_like(xgg)
-		# NEURAL PSI
-		psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
-		psi = psi_.reshape(params['n_test'], params['n_test'],
-		                   params['n_test'])
-		# LCAO
-		fi_r1, fi_r2 = modelTest.atomicUnit(xgg, ygg, zgg, Rt)
-		psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
-		psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
-		                       params['n_test'])
-	psi = psi * Npsi
-	psi_L = psi_L * Npsi_L
-	if detachAll:
-		x, y, z = x.detach().numpy(), y.detach().numpy(), z.detach().numpy(),
-		psi, psi_L = psi.detach().numpy(), psi_L.detach().numpy()
-	return x, y, z, psi, psi_L
-
-
-def psiX_norm(Ri, dense_sampling=False, densePoints=200):
-	x, y, z, psi, psi_L = psi3d_norm(Ri, densePoints, dense_sampling)
-	cN = int(params['n_test'] / 2)
-	ps2 = (psi[:, :, cN])
-	psiCut = ps2[:, cN].reshape(-1, 1)
-	ps2_L = (psi_L[:, :, cN])
-	ps2_LCut = (ps2_L[:, cN]).reshape(-1, 1)
-	return x, psiCut, ps2_LCut
-
-
 params['n_test'] = 80
 boundaries = 10
 params['xL'] = -boundaries
@@ -1199,49 +1468,6 @@ plt.xlabel("$R$")
 plt.xticks(np.arange(0.5, 4.5, 0.5))
 plt.tight_layout()
 plt.savefig('fig4.pdf', format='pdf')
-
-
-# # Hellmann-Feynman theorem
-def hamiltonian_R(x, y, z, R, psi, params):
-	r1, r2 = radial(x, y, z, R, params)
-	# V = -1/r1 -1/r2
-	# VR = grad([V], [R], grad_outputs=torch.ones(R.shape, dtype=dtype), create_graph=True)[0]
-	VR = -(x - R) / r1.pow(3) + (x + R) / r2.pow(3)
-	return VR * psi
-
-
-def dEdR_int(Ri, params):
-	modelTest = NN_ion(params)
-	modelTest.loadModel(params)
-	x, y, z, R = sampling(params, params['n_test'], linearSampling=True)
-	x = x.ravel()
-	y = y.ravel()
-	z = z.ravel()
-	xg, yg, zg = torch.meshgrid(x, y, z)
-	xgg = xg.reshape(-1, 1)
-	ygg = yg.reshape(-1, 1)
-	zgg = zg.reshape(-1, 1)
-	Rt = Ri * torch.ones_like(xgg)
-	# Rt.requires_grad=True
-	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg, Rt)
-	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
-	Npsi = 1 / np.sqrt(integra3d(x.cpu(), y.cpu(), z.cpu(),
-	                             (psi.cpu()).pow(2)))
-	psi = Npsi * psi
-	psi_ = Npsi * psi_
-	hR_psi = hamiltonian_R(xgg, ygg, zgg, Rt, psi_, params)
-	x = x.cpu()
-	y = y.cpu()
-	z = z.cpu()
-	psi = psi.cpu()
-	hR_psi = hR_psi.cpu()
-	hR_psi = hR_psi.reshape(params['n_test'], params['n_test'],
-	                        params['n_test'])
-	dE_integral = integra3d(x, y, z, psi * hR_psi)
-	dE_integral = dE_integral - 1 / (2 * Ri**2)
-	return dE_integral
-
-
 ## FOR 250 test points you need more than 32GB
 params['n_test'] = 250
 Ri = 1
@@ -1307,240 +1533,4 @@ plt.axhline(0, c='r', linestyle='--', linewidth=lineW * 1, alpha=0.5)
 # plt.plot(R_, dE2_, 'g')
 plt.ylim([-2, 0.25])
 len(Rexact)
-
-
-# # END
-def energy_from_psi(params, printE=False, calcLCAO=False):
-	max_d = 7
-	params['xL'] = -max_d
-	params['xR'] = max_d
-	params['zL'] = -max_d
-	params['zR'] = max_d
-	params['yL'] = -max_d
-	params['yR'] = max_d
-	modelTest = NN_ion(params)
-	modelTest.loadModel(params)
-	x, y, z = sampling(params, params['n_test'], linearSampling=True)
-	x = x.ravel()
-	y = y.ravel()
-	z = z.ravel()
-	xg, yg, zg = torch.meshgrid(x, y, z)
-	xgg = xg.reshape(-1, 1)
-	ygg = yg.reshape(-1, 1)
-	zgg = zg.reshape(-1, 1)
-	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg)
-	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
-	# # Energy from psi
-	h_psi = hamiltonian(xgg, ygg, zgg, psi_, params)
-	h_psi = h_psi.reshape(params['n_test'], params['n_test'], params['n_test'])
-	E_integral = integra3d(x, y, z, psi * h_psi) / integra3d(
-	    x, y, z, (psi).pow(2))
-	Eparameter = E[-1].detach().numpy()
-	#############
-	## LCAO
-	#############
-	E_integral_lcao = 0
-	if calcLCAO == True:
-		fi_r1, fi_r2 = modelTest.atomicUnit((xgg), ygg, zgg)
-		psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
-		psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
-		                       params['n_test'])
-		h_psi_L = hamiltonian(xgg, ygg, zgg, psi_L_, params)
-		h_psi_L = h_psi_L.reshape(params['n_test'], params['n_test'],
-		                          params['n_test'])
-		E_integral_lcao = integra3d(x, y, z, psi_L * h_psi_L) / integra3d(
-		    x, y, z, psi_L.pow(2))
-	if printE == True:
-		print('E_integral = ', E_integral)
-		print('E_param = ', Eparameter)
-		print('E_exac = ', -1.452)
-		print('E_lcao_daniel = ', -1.288)
-		print('E_integral_LCAO = ', E_integral_lcao)
-	return E_integral, Eparameter, E_integral_lcao
-
-
-def plot_psi(params, plotSurf=False, saveFig=False):
-	modelTest = NN_ion(params)
-	modelTest.loadModel(params)
-	x, y, z = sampling(params, params['n_test'], linearSampling=True)
-	x = x.ravel()
-	y = y.ravel()
-	z = z.ravel()
-	xg, yg, zg = torch.meshgrid(x, y, z)
-	xgg = xg.reshape(-1, 1)
-	ygg = yg.reshape(-1, 1)
-	zgg = zg.reshape(-1, 1)
-	psi_, E = modelTest.parametricPsi(xgg, ygg, zgg)
-	psi = psi_.reshape(params['n_test'], params['n_test'], params['n_test'])
-	psi = psi.cpu()
-	xgg = xgg.cpu()
-	ygg = ygg.cpu()
-	zgg = zgg.cpu()
-	xg = xg.cpu()
-	yg = yg.cpu()
-	zg = zg.cpu()
-	x = x.cpu()
-	y = y.cpu()
-	z = z.cpu()
-	psi = psi / np.sqrt(integra3d(x, y, z, (psi).pow(2)))
-	# print('Normalization of psi')
-	# LCAO
-	fi_r1, fi_r2 = modelTest.atomicUnit((xgg), ygg, zgg)
-	psi_L_ = modelTest.lcao_solution(fi_r1, fi_r2)
-	# r1,r2 = radial(xgg, ygg, zgg,params)
-	# psi_L_ = torch.exp(-r1) + torch.exp(-r2)
-	psi_L = psi_L_.reshape(params['n_test'], params['n_test'],
-	                       params['n_test'])
-	psi_L = psi_L / np.sqrt(integra3d(x, y, z, (psi_L).pow(2)))
-	# print('Normalization of psi LCAO')
-	cN = int(params['n_test'] / 2)
-	# print('z_cut = ', zg[0,0,cN], 'y_cut = ', yg[0,cN,0])
-	gx = xg[:, :, cN].detach().numpy()
-	gy = yg[:, :, cN].detach().numpy()
-	#gz = zg[:,cN,:].detach().numpy()
-	ps2 = (psi[:, :, cN])
-	psiCut = ps2[:, cN].reshape(-1, 1)
-	ps2_L = (psi_L[:, :, cN])
-	ps2_LCut = (ps2_L[:, cN]).reshape(-1, 1)
-	# res = hamiltonian(x,y,z, psiCut.squeeze(), params) - E[-1]*psiCut.squeeze()
-	# res_L = hamiltonian(x,y,z, ps2_LCut.squeeze(), params) + 1.288*ps2_LCut.squeeze()
-	ps2 = ps2.detach().numpy()
-	psiCut = psiCut.pow(2).detach().numpy()
-	ps2_L = ps2_L.detach().numpy()
-	ps2_LCut = ps2_LCut.pow(2).detach().numpy()
-	fig, ax = plt.subplots(3, sharex=True, figsize=[8, 12])
-	ax[0].contourf(gx, gy, ps2, 100, vmin=ps2.min(), vmax=ps2.max())
-	ax[0].set_ylabel('$y$')
-	# ax[0].set_xlabel('$x$')
-	ax[1].plot(x.detach().numpy(), psiCut, 'b', label='NN')
-	ax[1].plot(x.detach().numpy(), ps2_LCut, 'r', label='LCAO')
-	ax[1].set_xlabel('$x$')
-	ax[1].legend()
-	ax[2].plot(x.detach().numpy(), psiCut - ps2_LCut, 'k')
-	ax[2].set_xlabel('$x$')
-	ax[2].set_ylabel('$NN-LCAO$')
-	# ax[3].plot(x.detach().numpy(), res.detach().numpy(),'b',label='NN')
-	# ax[3].plot(x.detach().numpy(), res_L.detach().numpy(),'r',label='LCAO')
-	# ax[3].set_xlabel('$x$'); ax[3].set_ylabel('$Residuals$')
-	fig.tight_layout()
-	if saveFig == True:
-		fig.savefig('figures/solution_figure.jpg', format='jpg')
-	fig.tight_layout()
-	if plotSurf == True:
-		from matplotlib import cm
-		fig, ax = plt.subplots(1, subplot_kw={"projection": "3d"})
-		ax.plot_surface(gx,
-		                gy,
-		                ps2,
-		                cmap=cm.coolwarm,
-		                linewidth=0,
-		                antialiased=True)
-		fig, ax = plt.subplots(1, subplot_kw={"projection": "3d"})
-		ax.plot_surface(gx,
-		                gy,
-		                ps2_L,
-		                cmap=cm.coolwarm,
-		                linewidth=0,
-		                antialiased=True)
-		if saveFig == True:
-			fig.savefig('figures/surfacePlot_figure.jpg', format='jpg')
-
-
-def trainMultipleModels(params, Rx_list):
-	print('TRAIN MANY MODELS')
-	for r in Rx_list:
-		print('\n R = ', 2 * r)
-		params['Rx'] = r
-		params['lossPath'] = "data/loss_ionH" + '_R=' + str(round(2 * r,
-		                                                          1)) + '.pkl'
-		params['saveModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
-		                                                            1)) + ".pt"
-		params['loadModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
-		                                                            1)) + ".pt"
-		train(params, loadWeights=False)
-
-
-def evaluateMultipleModels(params, Rx_list, plots=False, saveEnergies=False):
-	# params['xL']= -5; params['xR']=  5;
-	params['yL'] = -0
-	params['yR'] = 0
-	params['zL'] = -0
-	params['zR'] = 0
-	x, y, z = sampling(params, params['n_test'], linearSampling=True)
-	e_exact = np.zeros([len(Rx_list), 1])
-	## R ->    [0.4 : 0.1 : 4.0 ]
-	e_exact = [
-	    -1.8, -1.67, -1.55, -1.45, -1.36, -1.28, -1.22, -1.156, -1.10, -1.06,
-	    -1.01, -0.98, -0.94, -0.91, -0.88, -0.86, -0.84, -0.81, -0.80
-	]
-	e_all = np.zeros([len(Rx_list), 1])
-	Etot = np.zeros([len(Rx_list), 1])
-	Etot_exact = np.zeros([len(Rx_list), 1])
-	E_int = np.zeros([len(Rx_list), 1])
-	E_int_L = np.zeros([len(Rx_list), 1])
-	j = 0
-	for r in Rx_list:
-		params['Rx'] = r
-		params['lossPath'] = "data/loss_ionH" + '_R=' + str(round(2 * r,
-		                                                          1)) + '.pkl'
-		params['saveModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
-		                                                            1)) + ".pt"
-		params['loadModelPath'] = "models/ionH" + '_R=' + str(round(2 * r,
-		                                                            1)) + ".pt"
-		modelTest = NN_ion(params)
-		modelTest.loadModel(params)
-		psi, E = modelTest.parametricPsi(x, y, z)
-		e_all[j] = E[-1].detach().numpy()
-		# print('Interatomic distance: ', 2*params['Rx'])
-		Etot[j] = E[-1].detach().numpy() + 1 / (2 * r)
-		Etot_exact[j] = e_exact[j] + 1 / (2 * r)
-		if plots == True:
-			plot_psi(params, plotSurf=False)
-			plt.title('r = ' + str(r))
-			plotLoss(params, saveFig=False)
-			plt.title('r = ' + str(r))
-		E_int[j], Eparameter, E_int_L[j] = energy_from_psi(params,
-		                                                   printE=False,
-		                                                   calcLCAO=False)
-		E_int[j] = E_int[j] + 1 / (2 * r)
-		E_int_L[j] = E_int_L[j] + 1 / (2 * r)
-		j += 1
-	if saveEnergies == True:
-		EnergyDictionary = {
-		    'Etot': Etot,
-		    'e_all': e_all,
-		    'Etot_exact': Etot_exact,
-		    'E_int': E_int,
-		    'E_int_L': E_int_L
-		}
-		with open(params['EnergyPath'], 'wb') as f:
-			pickle.dump(EnergyDictionary, f)
-
-
-	# return Etot, e_all, Etot_exact, E_int, E_int_L
-def plot_EforR(params, Rx_list, plotIntegral=False):
-	with open(params['EnergyPath'], 'rb') as f:
-		enr_dic = pickle.load(f)
-	Etot, Etot_exact = enr_dic['Etot'], enr_dic['Etot_exact']
-	E_int, E_int_L = enr_dic['E_int'], enr_dic['E_int_L']
-	# e_all =enr_dic['e_all'],
-	e_lcao, Etot_lcao, R_lcao = LCAO_dispersion()
-	plt.figure(figsize=[12, 8])
-	plt.plot(Rx_list, Etot, 'o-b', label='Network')
-	plt.plot(Rx_list, Etot_exact, '^-k', label='Exact')
-	plt.plot(R_lcao, Etot_lcao, '*-m', label='LCAO', alpha=0.7)
-	if plotIntegral == True:
-		plt.plot(Rx_list, E_int, 'x-g', label='network_integral')
-		# plt.plot(Rx_list ,E_int_L,'*-r',label='LCAO integral', alpha=0.7)
-	plt.legend()
-	# plt.xlim([0.9*min(Rx_list),1.1*max(Rx_list)])
-	plt.xlim([0, 2])
-	plt.ylim([-1, 1])
-	plt.xlabel('Half interatomic distance')
-	plt.ylabel('Energy')
-	plt.tight_layout()
-	# plt.ylim([-2.5,-0.5])
-	plt.savefig('figures/dispersion.jpg', format='jpg')
-
-
 plot_psi(params, plotSurf=False)
