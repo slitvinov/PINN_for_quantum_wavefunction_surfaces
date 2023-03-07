@@ -1,5 +1,10 @@
 import torch
 import itertools
+import math
+
+
+def ini(*shape):
+	return (2 * torch.rand(shape) - 1) / math.sqrt(shape[0])
 
 
 def d2(f, x):
@@ -64,6 +69,7 @@ sc_sampling = 1
 n = 16
 m = 32
 k = 10
+
 H1 = torch.nn.Linear(2, n)
 H2 = torch.nn.Linear(n, n)
 H3 = torch.nn.Linear(n, 1)
