@@ -2,11 +2,6 @@ import torch
 import itertools
 import math
 
-
-def ini(*shape):
-	return (2 * torch.rand(shape) - 1) / math.sqrt(shape[0])
-
-
 def d2(f, x):
 	df = torch.autograd.grad([f], [x],
 	                         grad_outputs=torch.ones(x.shape, dtype=dtype),
@@ -64,28 +59,27 @@ L = 18
 lr = 8e-3
 n_train = 100000
 RxL = 0.2
-RxR = 4
+RxR = 3
 sc_sampling = 1
-n = 16
-m = 32
-k = 10
+h = 16
+e = 32
+l = 10
+H1 = torch.nn.Linear(2, h)
+H2 = torch.nn.Linear(h, h)
+H3 = torch.nn.Linear(h, 1)
+E1 = torch.nn.Linear(1, e)
+E2 = torch.nn.Linear(e, e)
+E3 = torch.nn.Linear(e, 1)
+L1 = torch.nn.Linear(1, l)
+L2 = torch.nn.Linear(l, 1)
 
-H1 = torch.nn.Linear(2, n)
-H2 = torch.nn.Linear(n, n)
-H3 = torch.nn.Linear(n, 1)
-E1 = torch.nn.Linear(1, m)
-E2 = torch.nn.Linear(m, m)
-E3 = torch.nn.Linear(m, 1)
-L1 = torch.nn.Linear(1, k)
-L2 = torch.nn.Linear(k, 1)
-
-epochs = 10
+epochs = 5000
 lr = 8e-3
 params = itertools.chain(*(params.parameters()
                            for params in [H1, H2, H3, E1, E2, E3, L1, L2]))
 train()
 
-epochs = 10
-lr = 5e-4
+epochs = 5000
+lr = 1e-4
 params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
 train()
