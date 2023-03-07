@@ -1469,7 +1469,7 @@ plt.xticks(np.arange(0.5, 4.5, 0.5))
 plt.tight_layout()
 plt.savefig('fig4.pdf', format='pdf')
 ## FOR 250 test points you need more than 32GB
-params['n_test'] = 250
+params['n_test'] = 10
 Ri = 1
 torch.cuda.empty_cache()
 dE_HF = dEdR_int(Ri, params)
@@ -1484,14 +1484,14 @@ for Ri in Rx_list_net:
 	rE[i] = Ri
 	i = i + 1
 plt.figure(figsize=(10, 6))
-plt.plot(R.cpu().detach().numpy(),
-         dE_,
-         '--b',
-         linewidth=lineW,
-         label='Using auto-diff')
-plt.plot(rE[0:-1], dE_int, **marker_style_int, label='From Expectation')
-plt.plot(Rexact[0:-1], dE_ex, **marker_style_exact)
-plt.plot(rE[0:-1], dE_net, **marker_style_net, label='finite difference')
+# plt.plot(R.cpu().detach().numpy(),
+#          dE_,
+#          '--b',
+#          linewidth=lineW,
+#          label='Using auto-diff')
+# plt.plot(rE[0:-1], dE_int, **marker_style_int, label='From Expectation')
+# plt.plot(Rexact[0:-1], dE_ex, **marker_style_exact)
+# plt.plot(rE[0:-1], dE_net, **marker_style_net, label='finite difference')
 plt.plot(rE, dE_HF, 'or', label='Hellmann-Feynman')
 plt.axhline(0, c='r', linestyle='--', linewidth=lineW * 1, alpha=0.5)
 plt.legend()
@@ -1517,7 +1517,7 @@ plt.plot(Rexact,
          e_exact + 1 / 2 / Rexact,
          **marker_style_exact,
          label='Ground truth')
-plt.plot(R_, E_, 'b', linewidth=lineW, label='NN output')
+# plt.plot(R_, E_, 'b', linewidth=lineW, label='NN output')
 plt.plot(rE,
          E_int + 1 / (2 * rE),
          **marker_style_int,
@@ -1526,11 +1526,11 @@ plt.legend()
 plt.ylim([-.65, -0.2])
 # plt.figure(figsize=[6,4])
 plt.subplot(2, 1, 2)
-plt.plot(R_, dE_, 'b')
-plt.plot(rE, dE_int, **marker_style_int)
-plt.plot(rE[0:-1], dE_ex, **marker_style_exact)
+# plt.plot(R_, dE_, 'b')
+# plt.plot(rE, dE_int, **marker_style_int)
+# plt.plot(rE[0:-1], dE_ex, **marker_style_exact)
 plt.axhline(0, c='r', linestyle='--', linewidth=lineW * 1, alpha=0.5)
 # plt.plot(R_, dE2_, 'g')
 plt.ylim([-2, 0.25])
 len(Rexact)
-plot_psi(params, plotSurf=False)
+# plot_psi(params, plotSurf=False)
