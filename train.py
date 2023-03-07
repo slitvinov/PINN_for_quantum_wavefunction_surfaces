@@ -5,36 +5,6 @@ import torch.nn as nn
 from torch.autograd import grad
 from os import path
 import pickle
-def set_params():
-	params = dict()
-	boundaries = 18
-	params['xL'] = -boundaries
-	params['xR'] = boundaries
-	params['yL'] = -boundaries
-	params['yR'] = boundaries
-	params['zL'] = -boundaries
-	params['zR'] = boundaries
-	params['BCcutoff'] = 17.5
-	params['RxL'] = 0.2
-	params['RxR'] = 4
-	params['Ry'] = 0
-	params['Rz'] = 0
-	params['cutOff'] = 0.005
-	params['lossPath'] = "loss_ionH.pkl"
-	params['saveModelPath'] = "models/ionHsym.pt"
-	params['loadModelPath'] = "models/ionHsym.pt"
-	params['EnrR_path'] = "data/energy_R_ion.pkl"
-	params['sc_step'] = 3000
-	params['sc_decay'] = .7  ## WAS 3000
-	params['sc_sampling'] = 1
-	params['n_train'] = 100000
-	params['n_test'] = 80
-	params['epochs'] = int(5e3)
-	#2e3
-	params['lr'] = 8e-3
-	params['inversion_symmetry'] = 1
-	return params
-
 
 class toR(torch.nn.Module):
 
@@ -116,11 +86,6 @@ def sampling(params, n_points):
 	z.requires_grad = True
 	R.requires_grad = True
 	return x, y, z, R
-
-
-def saveLoss(params, lossDictionary):
-	with open(params['lossPath'], 'wb') as f:
-		pickle.dump(lossDictionary, f)
 
 
 class NN_ion(nn.Module):
@@ -321,12 +286,34 @@ def train(params, loadWeights=False, freezeUnits=False):
 	    'Lpde': Lpde_h,
 	    'Energy': E_h
 	}
-	saveLoss(params, lossDictionary)
 	print('last learning rate: ', scheduler.get_last_lr())
 
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
-params = set_params()
+params = dict()
+boundaries = 18
+params['xL'] = -boundaries
+params['xR'] = boundaries
+params['yL'] = -boundaries
+params['yR'] = boundaries
+params['zL'] = -boundaries
+params['zR'] = boundaries
+params['BCcutoff'] = 17.5
+params['RxL'] = 0.2
+params['RxR'] = 4
+params['Ry'] = 0
+params['Rz'] = 0
+params['cutOff'] = 0.005
+params['saveModelPath'] = "models/ionHsym.pt"
+params['loadModelPath'] = "models/ionHsym.pt"
+params['sc_step'] = 3000
+params['sc_decay'] = .7  ## WAS 3000
+params['sc_sampling'] = 1
+params['n_train'] = 100000
+params['n_test'] = 80
+params['epochs'] = int(5e3)
+params['lr'] = 8e-3
+params['inversion_symmetry'] = 1
 params['epochs'] = 1
 nEpoch1 = params['epochs']
 params['n_train'] = 100000
