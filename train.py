@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.autograd import grad
 import pickle
 
+
 class toR(torch.nn.Module):
 
 	@staticmethod
@@ -20,6 +21,7 @@ class atomicAct_s(torch.nn.Module):
 	@staticmethod
 	def forward(input):
 		return torch.exp(-input)
+
 
 def dfx(x, f):
 	return grad([f], [x],
@@ -60,8 +62,7 @@ def sampling(n_points):
 	x = (xL - xR) * torch.rand(n_points, 1) + xR
 	y = (yL - yR) * torch.rand(n_points, 1) + yR
 	z = (zL - zR) * torch.rand(n_points, 1) + zR
-	R = (RxL - RxR) * torch.rand(n_points,
-		                                         1) + RxR
+	R = (RxL - RxR) * torch.rand(n_points, 1) + RxR
 	r1, r2 = radial(x, y, z, R)
 	x[r1 < cutOff] = cutOff
 	x[r2 < cutOff] = cutOff
@@ -75,6 +76,7 @@ def sampling(n_points):
 
 
 class NN_ion(nn.Module):
+
 	def __init__(self,
 	             dense_neurons=16,
 	             dense_neurons_E=32,
@@ -160,12 +162,17 @@ class NN_ion(nn.Module):
 		return N, E
 
 	def loadModel(self):
-		checkpoint = torch.load(loadModelPath, map_location=torch.device('cpu'))
+		checkpoint = torch.load(loadModelPath,
+		                        map_location=torch.device('cpu'))
 		self.load_state_dict(checkpoint['model_state_dict'])
 		self.eval()
 
 	def saveModel(self, optimizer):
-		torch.save({'model_state_dict': self.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),}, saveModelPath)
+		torch.save(
+		    {
+		        'model_state_dict': self.state_dict(),
+		        'optimizer_state_dict': optimizer.state_dict(),
+		    }, saveModelPath)
 
 	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
 		lam_bc, lam_pde = 1, 1  #lam_tr = 1e-9
@@ -178,7 +185,8 @@ class NN_ion(nn.Module):
 		Ltot = LossPDE + Lbc
 		return Ltot, LossPDE, Lbc, E
 
-def train(loadWeights=False, freezeUnits=False):
+
+def train(loadWeights, freezeUnits):
 	model = NN_ion()
 	optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
 	print('train with Adam')
@@ -188,10 +196,6 @@ def train(loadWeights=False, freezeUnits=False):
 	Llim = 10
 	optEpoch = 0
 	total_epochs = epochs
-	Ltot_h = np.zeros([total_epochs, 1])
-	Lpde_h = np.zeros([total_epochs, 1])
-	Lbc_h = np.zeros([total_epochs, 1])
-	E_h = np.zeros([total_epochs, 1])
 	if loadWeights == True:
 		model.loadModel()
 	if freezeUnits == True:
@@ -210,20 +214,14 @@ def train(loadWeights=False, freezeUnits=False):
 			r1, r2 = radial(x, y, z, R)
 			bIndex1 = torch.where(r1 >= BCcutoff)
 			bIndex2 = torch.where(r2 >= BCcutoff)
-		Ltot, LossPDE, Lbc, E = model.LossFunctions(x, y, z, R,
-		                                            bIndex1, bIndex2)
+		Ltot, LossPDE, Lbc, E = model.LossFunctions(x, y, z, R, bIndex1,
+		                                            bIndex2)
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
-		Ltot_h[tt] = Ltot.cpu().data.numpy()
-		Lpde_h[tt] = LossPDE.cpu().data.numpy()
-		Lbc_h[tt] = Lbc.cpu().data.numpy()
-		E_h[tt] = E[-1].cpu().data.numpy()
-		if tt > 0.5 * epochs and Ltot < Llim:
-			Llim = Ltot
-			model.saveModel(optimizer)
-			optEpoch = tt
+	model.saveModel(optimizer)
 	print('Optimal epoch: ', optEpoch)
 	print('last learning rate: ', scheduler.get_last_lr())
+
 
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
@@ -253,8 +251,8 @@ zR = boundaries
 
 epochs = 1
 lr = 8e-3
-train(loadWeights=False, freezeUnits=False);
+train(False, False)
 
 epochs = 1
 lr = 5e-4
-# train(loadWeights=True, freezeUnits=True);
+train(True, True)
