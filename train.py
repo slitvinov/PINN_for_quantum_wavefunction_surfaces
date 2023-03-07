@@ -45,10 +45,9 @@ def train():
 		               1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
-		print("%.16e [%.3e %.3e]" %
-		      (Ltot.detach().numpy(), torch.min(psi).detach().numpy(),
-		       torch.max(psi).detach().numpy()))
 		optimizer.step()
+		if tt % 100 == 0:
+			print("%8d: %.8e" % (tt, Ltot.detach().numpy()))
 
 
 torch.manual_seed(123456)
@@ -58,7 +57,6 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 BCcutoff = 17.5
 cutOff = 0.005
 L = 18
-lr = 8e-3
 n_train = 100000
 RxL = 0.2
 RxR = 3
@@ -82,7 +80,7 @@ params = itertools.chain(*(params.parameters()
                            for params in [H1, H2, H3, E1, E2, E3, L1, L2]))
 train()
 
-# epochs = 5000
-# lr = 1e-4
-# params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
-# train()
+epochs = 5000
+lr = 1e-4
+params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
+train()
