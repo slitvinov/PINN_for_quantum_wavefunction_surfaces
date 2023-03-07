@@ -40,16 +40,15 @@ class NN_ion(torch.nn.Module):
 	             dense_neurons_E=32,
 	             netDecay_neurons=10):
 		super(NN_ion, self).__init__()
-		self.sig = torch.nn.Sigmoid()
 		self.Lin_H1 = torch.nn.Linear(2, dense_neurons)
-		self.Lin_H2 = torch.nn.Linear(dense_neurons, dense_neurons, bias=True)
+		self.Lin_H2 = torch.nn.Linear(dense_neurons, dense_neurons)
 		self.Lin_out = torch.nn.Linear(dense_neurons, 1)
 		self.Lin_E1 = torch.nn.Linear(1, dense_neurons_E)
 		self.Lin_E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
 		self.Lin_Eout = torch.nn.Linear(dense_neurons_E, 1)
 		torch.nn.init.constant_(self.Lin_Eout.bias[0], -1)
-		self.netDecayL = torch.nn.Linear(1, netDecay_neurons, bias=True)
-		self.netDecay = torch.nn.Linear(netDecay_neurons, 1, bias=True)
+		self.netDecayL = torch.nn.Linear(1, netDecay_neurons)
+		self.netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
 	def atomicUnit(self, x, y, z, R):
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
@@ -59,20 +58,20 @@ class NN_ion(torch.nn.Module):
 	def base(self, fi_r1, fi_r2):
 		fi_r = torch.cat((fi_r1, fi_r2), 1)
 		fi_r = self.Lin_H1(fi_r)
-		fi_r = self.sig(fi_r)
+		fi_r = torch.sigmoid(fi_r)
 		fi_r = self.Lin_H2(fi_r)
-		return self.sig(fi_r)
+		return torch.sigmoid(fi_r)
 
 	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
 		e = self.Lin_E1(R)
-		e = self.sig(e)
+		e = torch.sigmoid(e)
 		e = self.Lin_E2(e)
-		e = self.sig(e)
+		e = torch.sigmoid(e)
 		fi_r1, fi_r2 = self.atomicUnit(x, y, z, R)
 		fi_r1m, fi_r2m = self.atomicUnit(-x, y, z, R)
 		B = self.base(fi_r1, fi_r2) + self.base(fi_r1m, fi_r2m)
 		f = self.netDecayL(R)
-		f = self.sig(f)
+		f = torch.sigmoid(f)
 		psi = self.Lin_out(B) * self.netDecay(f) + fi_r1 + fi_r2
 		E = self.Lin_Eout(e)
 		res = hamiltonian(x, y, z, R, psi) - E * psi
