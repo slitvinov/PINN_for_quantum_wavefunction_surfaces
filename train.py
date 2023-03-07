@@ -1,9 +1,5 @@
 import numpy as np
 import torch
-import torch.optim as optim
-import torch.nn as nn
-from torch.autograd import grad
-import pickle
 
 
 class toR(torch.nn.Module):
@@ -23,21 +19,13 @@ class atomicAct_s(torch.nn.Module):
 		return torch.exp(-input)
 
 
-def dfx(x, f):
-	return grad([f], [x],
-	            grad_outputs=torch.ones(x.shape, dtype=dtype),
-	            create_graph=True)[0]
-
-
 def d2fx(x, f):
-	return grad(dfx(x, f), [x],
-	            grad_outputs=torch.ones(x.shape, dtype=dtype),
-	            create_graph=True)[0]
-
-
-def lapl(x, y, z, f):
-	f_xx, f_yy, f_zz = d2fx(x, f), d2fx(y, f), d2fx(z, f)
-	return f_xx + f_yy + f_zz
+	df = torch.autograd.grad([f], [x],
+	                         grad_outputs=torch.ones(x.shape, dtype=dtype),
+	                         create_graph=True)[0]
+	return torch.autograd.grad(df, [x],
+	                           grad_outputs=torch.ones(x.shape, dtype=dtype),
+	                           create_graph=True)[0]
 
 
 def radial(x, y, z, R):
@@ -54,14 +42,14 @@ def V(x, y, z, R):
 
 
 def hamiltonian(x, y, z, R, psi):
-	laplacian = lapl(x, y, z, psi)
+	laplacian = d2fx(x, psi) + d2fx(y, psi) + d2fx(z, psi)
 	return -0.5 * laplacian + V(x, y, z, R) * psi
 
 
 def sampling(n_points):
-	x = (xL - xR) * torch.rand(n_points, 1) + xR
-	y = (yL - yR) * torch.rand(n_points, 1) + yR
-	z = (zL - zR) * torch.rand(n_points, 1) + zR
+	x = 2 * L * torch.rand(n_points, 1) + L
+	y = 2 * L * torch.rand(n_points, 1) + L
+	z = 2 * L * torch.rand(n_points, 1) + L
 	R = (RxL - RxR) * torch.rand(n_points, 1) + RxR
 	r1, r2 = radial(x, y, z, R)
 	x[r1 < cutOff] = cutOff
@@ -75,14 +63,14 @@ def sampling(n_points):
 	return x, y, z, R
 
 
-class NN_ion(nn.Module):
+class NN_ion(torch.nn.Module):
 
 	def __init__(self,
 	             dense_neurons=16,
 	             dense_neurons_E=32,
 	             netDecay_neurons=10):
 		super(NN_ion, self).__init__()
-		self.sig = nn.Sigmoid()
+		self.sig = torch.nn.Sigmoid()
 		self.toR = toR()
 		self.actAO_s = atomicAct_s()
 		self.Lin_H1 = torch.nn.Linear(2, dense_neurons)
@@ -91,7 +79,7 @@ class NN_ion(nn.Module):
 		self.Lin_E1 = torch.nn.Linear(1, dense_neurons_E)
 		self.Lin_E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
 		self.Lin_Eout = torch.nn.Linear(dense_neurons_E, 1)
-		nn.init.constant_(self.Lin_Eout.bias[0], -1)
+		torch.nn.init.constant_(self.Lin_Eout.bias[0], -1)
 		self.Ry = Ry
 		self.Rz = Rz
 		self.P = inversion_symmetry
@@ -143,36 +131,16 @@ class NN_ion(nn.Module):
 		fi_r = self.sig(fi_r)
 		return fi_r
 
-	def freeze(self):
-		self.Lin_H1.weight.requires_grad = False
-		self.Lin_H1.bias.requires_grad = False
-		self.Lin_H2.weight.requires_grad = False
-		self.Lin_H2.bias.requires_grad = False
-		self.Lin_out.weight.requires_grad = False
-		self.Lin_out.bias.requires_grad = False
-		self.netDecayL.weight.requires_grad = False
-		self.netDecayL.bias.requires_grad = False
-		self.netDecay.weight.requires_grad = False
-		self.netDecay.bias.requires_grad = False
-
-	def parametricPsi(self, x, y, z, R):
-		N, E = self.forward(x, y, z, R)
-		return N, E
-
 	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
-		lam_bc, lam_pde = 1, 1
-		psi, E = self.parametricPsi(x, y, z, R)
+		psi, E = self.forward(x, y, z, R)
 		res = hamiltonian(x, y, z, R, psi) - E * psi
-		LossPDE = (res.pow(2)).mean() * lam_pde
-		Ltot = LossPDE
-		Lbc = lam_bc * ((psi[bIndex1].pow(2)).mean() +
-		                (psi[bIndex2].pow(2)).mean())
-		Ltot = LossPDE + Lbc
-		return Ltot, LossPDE, Lbc, E
+		LossPDE = (res.pow(2)).mean()
+		Lbc = (psi[bIndex1].pow(2)).mean() + (psi[bIndex2].pow(2)).mean()
+		return LossPDE + Lbc
 
 
 def train():
-	optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
+	optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0)
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
 	                                            step_size=sc_step,
 	                                            gamma=sc_decay)
@@ -188,21 +156,21 @@ def train():
 			r1, r2 = radial(x, y, z, R)
 			bIndex1 = torch.where(r1 >= BCcutoff)
 			bIndex2 = torch.where(r2 >= BCcutoff)
-		Ltot, LossPDE, Lbc, E = model.LossFunctions(x, y, z, R, bIndex1,
-		                                            bIndex2)
+		Ltot = model.LossFunctions(x, y, z, R, bIndex1, bIndex2)
 		Ltot.backward(retain_graph=False)
+		print("%.16e" % Ltot.detach().numpy())
 		optimizer.step()
 	print('last learning rate: ', scheduler.get_last_lr())
 
 
+torch.manual_seed(123456)
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
-boundaries = 18
 
 BCcutoff = 17.5
 cutOff = 0.005
 inversion_symmetry = 1
-loadModelPath = "model.pt"
+L = 18
 lr = 8e-3
 n_test = 80
 n_train = 100000
@@ -210,23 +178,25 @@ RxL = 0.2
 RxR = 4
 Ry = 0
 Rz = 0
-saveModelPath = "model.pt"
 sc_decay = .7
 sc_sampling = 1
 sc_step = 3000
-xL = -boundaries
-xR = boundaries
-yL = -boundaries
-yR = boundaries
-zL = -boundaries
-zR = boundaries
 model = NN_ion()
 
-epochs = 1
+epochs = 10
 lr = 8e-3
 train()
 
-epochs = 1
+epochs = 10
 lr = 5e-4
-model.freeze()
+model.Lin_H1.weight.requires_grad = False
+model.Lin_H1.bias.requires_grad = False
+model.Lin_H2.weight.requires_grad = False
+model.Lin_H2.bias.requires_grad = False
+model.Lin_out.weight.requires_grad = False
+model.Lin_out.bias.requires_grad = False
+model.netDecayL.weight.requires_grad = False
+model.netDecayL.bias.requires_grad = False
+model.netDecay.weight.requires_grad = False
+model.netDecay.bias.requires_grad = False
 train()
