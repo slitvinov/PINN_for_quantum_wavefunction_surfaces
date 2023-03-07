@@ -2,6 +2,7 @@ import torch
 import itertools
 import math
 
+
 def d2(f, x):
 	df = torch.autograd.grad([f], [x],
 	                         grad_outputs=torch.ones(x.shape, dtype=dtype),
@@ -32,20 +33,21 @@ def train():
 			y.requires_grad = True
 			z.requires_grad = True
 			R.requires_grad = True
-		e = torch.sigmoid(E2(torch.sigmoid(E1(R))))
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 		f1 = torch.exp(-r1)
 		f2 = torch.exp(-r2)
-		ff = torch.cat((f1, f2), 1)
-		B = 2 * torch.sigmoid(H2(torch.sigmoid(H1(ff))))
-		f = torch.sigmoid(L1(R))
-		psi = H3(B) * L2(f) + f1 + f2
-		res = d2(psi, x) + d2(psi, y) + d2(psi,
-		                                   z) + (E3(e) + 1 / r1 + 1 / r2) * psi
+		psi = H3(
+		    2 * torch.sigmoid(H2(torch.sigmoid(H1(torch.hstack(
+		        (f1, f2))))))) * L2(torch.sigmoid(L1(R))) + f1 + f2
+		res = d2(psi, x) + d2(psi, y) + d2(
+		    psi, z) + (E3(torch.sigmoid(E2(torch.sigmoid(E1(R))))) + E3b +
+		               1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
-		print("%.16e" % Ltot.detach().numpy())
+		print("%.16e [%.3e %.3e]" %
+		      (Ltot.detach().numpy(), torch.min(psi).detach().numpy(),
+		       torch.max(psi).detach().numpy()))
 		optimizer.step()
 
 
@@ -69,7 +71,8 @@ H2 = torch.nn.Linear(h, h)
 H3 = torch.nn.Linear(h, 1)
 E1 = torch.nn.Linear(1, e)
 E2 = torch.nn.Linear(e, e)
-E3 = torch.nn.Linear(e, 1)
+E3 = torch.nn.Linear(e, 1, bias=False)
+E3b = -1
 L1 = torch.nn.Linear(1, l)
 L2 = torch.nn.Linear(l, 1)
 
@@ -79,7 +82,7 @@ params = itertools.chain(*(params.parameters()
                            for params in [H1, H2, H3, E1, E2, E3, L1, L2]))
 train()
 
-epochs = 5000
-lr = 1e-4
-params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
-train()
+# epochs = 5000
+# lr = 1e-4
+# params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
+# train()
