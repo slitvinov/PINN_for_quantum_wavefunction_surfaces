@@ -42,41 +42,31 @@ def lapl(x, y, z, f):
 	return f_xx + f_yy + f_zz
 
 
-def radial(x, y, z, R, params):
+def radial(x, y, z, R):
 	Rx = R
-	Ry = params['Ry']
-	Rz = params['Rz']
 	r1 = torch.sqrt((x - Rx).pow(2) + (y - Ry).pow(2) + (z - Rz).pow(2))
 	r2 = torch.sqrt((x + Rx).pow(2) + (y + Ry).pow(2) + (z + Rz).pow(2))
 	return r1, r2
 
 
-def V(x, y, z, R, params):
-	## Potential energy function
-	r1, r2 = radial(x, y, z, R, params)
+def V(x, y, z, R):
+	r1, r2 = radial(x, y, z, R)
 	potential = -1 / r1 - 1 / r2
 	return potential
 
 
-def hamiltonian(x, y, z, R, psi, params):
+def hamiltonian(x, y, z, R, psi):
 	laplacian = lapl(x, y, z, psi)
-	return -0.5 * laplacian + V(x, y, z, R, params) * psi
+	return -0.5 * laplacian + V(x, y, z, R) * psi
 
 
-def sampling(params, n_points):
-	xR = params['xR']
-	xL = params['xL']
-	yR = params['yR']
-	yL = params['yL']
-	zR = params['zR']
-	zL = params['zL']
-	cutOff = params['cutOff']
+def sampling(n_points):
 	x = (xL - xR) * torch.rand(n_points, 1) + xR
 	y = (yL - yR) * torch.rand(n_points, 1) + yR
 	z = (zL - zR) * torch.rand(n_points, 1) + zR
-	R = (params['RxL'] - params['RxR']) * torch.rand(n_points,
-		                                         1) + params['RxR']
-	r1, r2 = radial(x, y, z, R, params)
+	R = (RxL - RxR) * torch.rand(n_points,
+		                                         1) + RxR
+	r1, r2 = radial(x, y, z, R)
 	x[r1 < cutOff] = cutOff
 	x[r2 < cutOff] = cutOff
 	x, y, z = x.reshape(-1, 1), y.reshape(-1, 1), z.reshape(-1, 1)
@@ -90,7 +80,6 @@ def sampling(params, n_points):
 
 class NN_ion(nn.Module):
 	def __init__(self,
-	             params,
 	             dense_neurons=16,
 	             dense_neurons_E=32,
 	             netDecay_neurons=10):
@@ -105,9 +94,9 @@ class NN_ion(nn.Module):
 		self.Lin_E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
 		self.Lin_Eout = torch.nn.Linear(dense_neurons_E, 1)
 		nn.init.constant_(self.Lin_Eout.bias[0], -1)
-		self.Ry = params['Ry']
-		self.Rz = params['Rz']
-		self.P = params['inversion_symmetry']
+		self.Ry = Ry
+		self.Rz = Rz
+		self.P = inversion_symmetry
 		self.netDecayL = torch.nn.Linear(1, netDecay_neurons, bias=True)
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1, bias=True)
 
@@ -188,12 +177,12 @@ class NN_ion(nn.Module):
 		N, E = self.forward(x, y, z, R)
 		return N, E
 
-	def loadModel(self, params):
-		checkpoint = torch.load(params['loadModelPath'], map_location=torch.device('cpu'))
+	def loadModel(self):
+		checkpoint = torch.load(loadModelPath, map_location=torch.device('cpu'))
 		self.load_state_dict(checkpoint['model_state_dict'])
 		self.eval()
 
-	def saveModel(self, params, optimizer):
+	def saveModel(self, optimizer):
 		torch.save(
 		    {
 		        # 'epoch': epoch,
@@ -201,13 +190,13 @@ class NN_ion(nn.Module):
 		        'optimizer_state_dict': optimizer.state_dict(),
 		        # 'loss': loss
 		    },
-		    params['saveModelPath'])
+		    saveModelPath)
 
-	def LossFunctions(self, x, y, z, R, params, bIndex1, bIndex2):
+	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
 		lam_bc, lam_pde = 1, 1  #lam_tr = 1e-9
 		psi, E = self.parametricPsi(x, y, z, R)
 		#--# PDE
-		res = hamiltonian(x, y, z, R, psi, params) - E * psi
+		res = hamiltonian(x, y, z, R, psi) - E * psi
 		LossPDE = (res.pow(2)).mean() * lam_pde
 		Ltot = LossPDE
 		#--# BC
@@ -221,48 +210,45 @@ class NN_ion(nn.Module):
 
 
 # ## Training: Helper Function
-def train(params, loadWeights=False, freezeUnits=False):
-	lr = params['lr']
-	model = NN_ion(params)
+def train(loadWeights=False, freezeUnits=False):
+	model = NN_ion()
 	# modelBest=copy.deepcopy(model)
 	optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
 	print('train with Adam')
 	# optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.5)
 	# print('train with SGD')
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-	                                            step_size=params['sc_step'],
-	                                            gamma=params['sc_decay'])
+	                                            step_size=sc_step,
+	                                            gamma=sc_decay)
 	Llim = 10
 	optEpoch = 0
-	epochs = params['epochs']  # For Adam
 	total_epochs = epochs
-	# total_epochs = params['epochs_LB'] + epochs
 	Ltot_h = np.zeros([total_epochs, 1])
 	Lpde_h = np.zeros([total_epochs, 1])
 	Lbc_h = np.zeros([total_epochs, 1])
 	E_h = np.zeros([total_epochs, 1])
 	# Ltr_h = np.zeros([total_epochs,1]); Linv_h= np.zeros([total_epochs,1])
 	## LOADING pre-trained model if PATH file exists and loadWeights=True
-	if path.exists(params['loadModelPath']) and loadWeights == True:
+	if path.exists(loadModelPath) and loadWeights == True:
 		print('loading model')
-		model.loadModel(params)
+		model.loadModel()
 	if freezeUnits == True:
 		print('Freezeing Basis unit and Gate')
 		model.freezeDecayUnit()
 		model.freezeBase()
-	n_points = params['n_train']  # the training batch size
-	x, y, z, R = sampling(params, n_points)
-	r1, r2 = radial(x, y, z, R, params)
-	bIndex1 = torch.where(r1 >= params['BCcutoff'])
-	bIndex2 = torch.where(r2 >= params['BCcutoff'])
+	n_points = n_train  # the training batch size
+	x, y, z, R = sampling(n_points)
+	r1, r2 = radial(x, y, z, R)
+	bIndex1 = torch.where(r1 >= BCcutoff)
+	bIndex2 = torch.where(r2 >= BCcutoff)
 	for tt in range(epochs):
 		optimizer.zero_grad()
-		if tt % params['sc_sampling'] == 0 and tt < 0.9 * epochs:
-			x, y, z, R = sampling(params, n_points)
-			r1, r2 = radial(x, y, z, R, params)
-			bIndex1 = torch.where(r1 >= params['BCcutoff'])
-			bIndex2 = torch.where(r2 >= params['BCcutoff'])
-		Ltot, LossPDE, Lbc, E = model.LossFunctions(x, y, z, R, params,
+		if tt % sc_sampling == 0 and tt < 0.9 * epochs:
+			x, y, z, R = sampling(n_points)
+			r1, r2 = radial(x, y, z, R)
+			bIndex1 = torch.where(r1 >= BCcutoff)
+			bIndex2 = torch.where(r2 >= BCcutoff)
+		Ltot, LossPDE, Lbc, E = model.LossFunctions(x, y, z, R,
 		                                            bIndex1, bIndex2)
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
@@ -277,7 +263,7 @@ def train(params, loadWeights=False, freezeUnits=False):
 		#    Keep the best model (lowest loss). Checking after 50% of the total epochs
 		if tt > 0.5 * epochs and Ltot < Llim:
 			Llim = Ltot
-			model.saveModel(params, optimizer)
+			model.saveModel(optimizer)
 			optEpoch = tt
 	print('Optimal epoch: ', optEpoch)
 	lossDictionary = {
@@ -290,40 +276,39 @@ def train(params, loadWeights=False, freezeUnits=False):
 
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
-params = dict()
 boundaries = 18
-params['xL'] = -boundaries
-params['xR'] = boundaries
-params['yL'] = -boundaries
-params['yR'] = boundaries
-params['zL'] = -boundaries
-params['zR'] = boundaries
-params['BCcutoff'] = 17.5
-params['RxL'] = 0.2
-params['RxR'] = 4
-params['Ry'] = 0
-params['Rz'] = 0
-params['cutOff'] = 0.005
-params['saveModelPath'] = "models/ionHsym.pt"
-params['loadModelPath'] = "models/ionHsym.pt"
-params['sc_step'] = 3000
-params['sc_decay'] = .7  ## WAS 3000
-params['sc_sampling'] = 1
-params['n_train'] = 100000
-params['n_test'] = 80
-params['epochs'] = int(5e3)
-params['lr'] = 8e-3
-params['inversion_symmetry'] = 1
-params['epochs'] = 1
-nEpoch1 = params['epochs']
-params['n_train'] = 100000
-params['lr'] = 8e-3
-train(params, loadWeights=False, freezeUnits=False);
+xL = -boundaries
+xR = boundaries
+yL = -boundaries
+yR = boundaries
+zL = -boundaries
+zR = boundaries
+BCcutoff = 17.5
+RxL = 0.2
+RxR = 4
+Ry = 0
+Rz = 0
+cutOff = 0.005
+saveModelPath = "models/ionHsym.pt"
+loadModelPath = "models/ionHsym.pt"
+sc_step = 3000
+sc_decay = .7  ## WAS 3000
+sc_sampling = 1
+n_train = 100000
+n_test = 80
+epochs = int(5e3)
+lr = 8e-3
+inversion_symmetry = 1
+epochs = 1
+nEpoch1 = epochs
+n_train = 100000
+lr = 8e-3
+train(loadWeights=False, freezeUnits=False);
 optEpoch = 3598
-params['lossPath'] = "loss_ionH_fineTune.pkl"
-params['sc_sampling'] = 1
-params['epochs'] = 1
-nEpoch2 = params['epochs']
-params['n_train'] = 100000
-params['lr'] = 5e-4
-train(params, loadWeights=True, freezeUnits=True);
+lossPath = "loss_ionH_fineTune.pkl"
+sc_sampling = 1
+epochs = 1
+nEpoch2 = epochs
+n_train = 100000
+lr = 5e-4
+train(loadWeights=True, freezeUnits=True);
