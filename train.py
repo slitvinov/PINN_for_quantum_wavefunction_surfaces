@@ -39,10 +39,10 @@ def train():
 		f2 = torch.exp(-r2)
 		ff = torch.cat((f1, f2), 1)
 		B = 2 * torch.sigmoid(H2(torch.sigmoid(H1(ff))))
-		f = torch.sigmoid(netDecayL(R))
-		psi = out(B) * netDecay(f) + f1 + f2
-		res = d2(psi, x) + d2(psi, y) + d2(
-		    psi, z) + (Eout(e) + 1 / r1 + 1 / r2) * psi
+		f = torch.sigmoid(L1(R))
+		psi = H3(B) * L2(f) + f1 + f2
+		res = d2(psi, x) + d2(psi, y) + d2(psi,
+		                                   z) + (E3(e) + 1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
 		print("%.16e" % Ltot.detach().numpy())
@@ -61,26 +61,25 @@ n_train = 100000
 RxL = 0.2
 RxR = 4
 sc_sampling = 1
-dense_neurons = 16
-dense_neurons_E = 32
-netDecay_neurons = 10
-H1 = torch.nn.Linear(2, dense_neurons)
-H2 = torch.nn.Linear(dense_neurons, dense_neurons)
-out = torch.nn.Linear(dense_neurons, 1)
-E1 = torch.nn.Linear(1, dense_neurons_E)
-E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
-Eout = torch.nn.Linear(dense_neurons_E, 1)
-netDecayL = torch.nn.Linear(1, netDecay_neurons)
-netDecay = torch.nn.Linear(netDecay_neurons, 1)
+n = 16
+m = 32
+k = 10
+H1 = torch.nn.Linear(2, n)
+H2 = torch.nn.Linear(n, n)
+H3 = torch.nn.Linear(n, 1)
+E1 = torch.nn.Linear(1, m)
+E2 = torch.nn.Linear(m, m)
+E3 = torch.nn.Linear(m, 1)
+L1 = torch.nn.Linear(1, k)
+L2 = torch.nn.Linear(k, 1)
 
 epochs = 10
 lr = 8e-3
-params = itertools.chain(
-    *(params.parameters()
-      for params in [H1, H2, out, E1, E2, Eout, netDecayL, netDecay]))
+params = itertools.chain(*(params.parameters()
+                           for params in [H1, H2, H3, E1, E2, E3, L1, L2]))
 train()
 
 epochs = 10
 lr = 5e-4
-params = itertools.chain(*(params.parameters() for params in [E1, E2, Eout]))
+params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
 train()
