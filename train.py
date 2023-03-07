@@ -1,4 +1,5 @@
 import torch
+import itertools
 
 
 def d2(f, x):
@@ -10,29 +11,11 @@ def d2(f, x):
 	                           create_graph=True)[0]
 
 
-class NN(torch.nn.Module):
-
-	def __init__(self,
-	             dense_neurons=16,
-	             dense_neurons_E=32,
-	             netDecay_neurons=10):
-		super(NN, self).__init__()
-		self.H1 = torch.nn.Linear(2, dense_neurons)
-		self.H2 = torch.nn.Linear(dense_neurons, dense_neurons)
-		self.out = torch.nn.Linear(dense_neurons, 1)
-		self.E1 = torch.nn.Linear(1, dense_neurons_E)
-		self.E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
-		self.Eout = torch.nn.Linear(dense_neurons_E, 1)
-		torch.nn.init.constant_(self.Eout.bias[0], -1)
-		self.netDecayL = torch.nn.Linear(1, netDecay_neurons)
-		self.netDecay = torch.nn.Linear(netDecay_neurons, 1)
-
-
 def train():
-	optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0)
-	scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-	                                            step_size=sc_step,
-	                                            gamma=sc_decay)
+	params = itertools.chain(
+	    *(params.parameters()
+	      for params in [H1, H2, out, E1, E2, Eout, netDecayL, netDecay]))
+	optimizer = torch.optim.Adam(params, lr=lr)
 	for tt in range(epochs):
 		optimizer.zero_grad()
 		if tt % sc_sampling == 0 and tt < 0.9 * epochs:
@@ -52,17 +35,17 @@ def train():
 			r2sq = (x + R)**2 + y**2 + z**2
 			i1 = torch.where(r1sq >= BCcutoff**2)
 			i2 = torch.where(r2sq >= BCcutoff**2)
-		e = torch.sigmoid(model.E2(torch.sigmoid(model.E1(R))))
+		e = torch.sigmoid(E2(torch.sigmoid(E1(R))))
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 		f1 = torch.exp(-r1)
 		f2 = torch.exp(-r2)
 		ff = torch.cat((f1, f2), 1)
-		B = 2 * torch.sigmoid(model.H2(torch.sigmoid(model.H1(ff))))
-		f = torch.sigmoid(model.netDecayL(R))
-		psi = model.out(B) * model.netDecay(f) + f1 + f2
+		B = 2 * torch.sigmoid(H2(torch.sigmoid(H1(ff))))
+		f = torch.sigmoid(netDecayL(R))
+		psi = out(B) * netDecay(f) + f1 + f2
 		res = d2(psi, x) + d2(psi, y) + d2(
-		    psi, z) + (model.Eout(e) + 1 / r1 + 1 / r2) * psi
+		    psi, z) + (Eout(e) + 1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
 		print("%.16e" % Ltot.detach().numpy())
@@ -81,10 +64,20 @@ n_test = 80
 n_train = 100000
 RxL = 0.2
 RxR = 4
-sc_decay = .7
 sc_sampling = 1
-sc_step = 3000
-model = NN()
+
+dense_neurons = 16
+dense_neurons_E = 32
+netDecay_neurons = 10
+H1 = torch.nn.Linear(2, dense_neurons)
+H2 = torch.nn.Linear(dense_neurons, dense_neurons)
+out = torch.nn.Linear(dense_neurons, 1)
+E1 = torch.nn.Linear(1, dense_neurons_E)
+E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
+Eout = torch.nn.Linear(dense_neurons_E, 1)
+torch.nn.init.constant_(Eout.bias[0], -1)
+netDecayL = torch.nn.Linear(1, netDecay_neurons)
+netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
 epochs = 10
 lr = 8e-3
@@ -92,14 +85,14 @@ train()
 
 epochs = 10
 lr = 5e-4
-model.H1.weight.requires_grad = False
-model.H1.bias.requires_grad = False
-model.H2.weight.requires_grad = False
-model.H2.bias.requires_grad = False
-model.out.weight.requires_grad = False
-model.out.bias.requires_grad = False
-model.netDecayL.weight.requires_grad = False
-model.netDecayL.bias.requires_grad = False
-model.netDecay.weight.requires_grad = False
-model.netDecay.bias.requires_grad = False
+H1.weight.requires_grad = False
+H1.bias.requires_grad = False
+H2.weight.requires_grad = False
+H2.bias.requires_grad = False
+out.weight.requires_grad = False
+out.bias.requires_grad = False
+netDecayL.weight.requires_grad = False
+netDecayL.bias.requires_grad = False
+netDecay.weight.requires_grad = False
+netDecay.bias.requires_grad = False
 train()
