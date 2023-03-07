@@ -1,22 +1,6 @@
 import torch
 
 
-class toR(torch.nn.Module):
-
-	@staticmethod
-	def forward(input):
-		r2 = input[:, 0].pow(2) + input[:, 1].pow(2) + input[:, 2].pow(2)
-		r = torch.sqrt(r2)
-		return r.reshape(-1, 1)
-
-
-class atomicAct_s(torch.nn.Module):
-
-	@staticmethod
-	def forward(input):
-		return torch.exp(-input)
-
-
 def d2fx(x, f):
 	df = torch.autograd.grad([f], [x],
 	                         grad_outputs=torch.ones(x.shape, dtype=dtype),
@@ -57,8 +41,6 @@ class NN_ion(torch.nn.Module):
 	             netDecay_neurons=10):
 		super(NN_ion, self).__init__()
 		self.sig = torch.nn.Sigmoid()
-		self.toR = toR()
-		self.actAO_s = atomicAct_s()
 		self.Lin_H1 = torch.nn.Linear(2, dense_neurons)
 		self.Lin_H2 = torch.nn.Linear(dense_neurons, dense_neurons, bias=True)
 		self.Lin_out = torch.nn.Linear(dense_neurons, 1)
@@ -70,13 +52,9 @@ class NN_ion(torch.nn.Module):
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1, bias=True)
 
 	def atomicUnit(self, x, y, z, R):
-		rVec1 = torch.cat((x - R, y, z), 1)
-		r1 = self.toR(rVec1)
-		fi_r1 = self.actAO_s(r1)
-		rVec2 = torch.cat((x + R, y, z), 1)
-		r2 = self.toR(rVec2)
-		fi_r2 = self.actAO_s(r2)
-		return fi_r1, fi_r2
+		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
+		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
+		return torch.exp(-r1), torch.exp(-r2)
 
 	def base(self, fi_r1, fi_r2):
 		fi_r = torch.cat((fi_r1, fi_r2), 1)
