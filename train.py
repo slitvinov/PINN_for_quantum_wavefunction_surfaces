@@ -144,15 +144,10 @@ def train():
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
 	                                            step_size=sc_step,
 	                                            gamma=sc_decay)
-	n_points = n_train
-	x, y, z, R = sampling(n_points)
-	r1, r2 = radial(x, y, z, R)
-	bIndex1 = torch.where(r1 >= BCcutoff)
-	bIndex2 = torch.where(r2 >= BCcutoff)
 	for tt in range(epochs):
 		optimizer.zero_grad()
 		if tt % sc_sampling == 0 and tt < 0.9 * epochs:
-			x, y, z, R = sampling(n_points)
+			x, y, z, R = sampling(n_train)
 			r1, r2 = radial(x, y, z, R)
 			bIndex1 = torch.where(r1 >= BCcutoff)
 			bIndex2 = torch.where(r2 >= BCcutoff)
