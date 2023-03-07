@@ -16,6 +16,7 @@ def hamiltonian(x, y, z, R, psi):
 	return -0.5 * (d2fx(x, psi) + d2fx(y, psi) + d2fx(z, psi)) - (1 / r1 +
 	                                                              1 / r2) * psi
 
+
 class NN_ion(torch.nn.Module):
 
 	def __init__(self,
@@ -56,11 +57,9 @@ class NN_ion(torch.nn.Module):
 		f = self.netDecayL(R)
 		f = torch.sigmoid(f)
 		psi = self.Lin_out(B) * self.netDecay(f) + fi_r1 + fi_r2
-		E = self.Lin_Eout(e)
-		res = hamiltonian(x, y, z, R, psi) - E * psi
-		LossPDE = (res.pow(2)).mean()
-		Lbc = (psi[bIndex1].pow(2)).mean() + (psi[bIndex2].pow(2)).mean()
-		return LossPDE + Lbc
+		res = hamiltonian(x, y, z, R, psi) - self.Lin_Eout(e) * psi
+		return (res**2).mean() + (psi[bIndex1]**2).mean() + (psi[bIndex2]**
+		                                                     2).mean()
 
 
 def train():
@@ -71,27 +70,26 @@ def train():
 	for tt in range(epochs):
 		optimizer.zero_grad()
 		if tt % sc_sampling == 0 and tt < 0.9 * epochs:
-                        	x = 2 * L * torch.rand(n_points, 1) + L
-	                        y = 2 * L * torch.rand(n_points, 1) + L
-	                        z = 2 * L * torch.rand(n_points, 1) + L
-	                        R = (RxL - RxR) * torch.rand(n_points, 1) + RxR
-	                        r1 = (x - R)**2 + y**2 + z**2
-	                        r2 = (x + R)**2 + y**2 + z**2
-	                        x[r1 < cutOff**2] = cutOff
-	                        x[r2 < cutOff**2] = cutOff
-	                        x.requires_grad = True
-	                        y.requires_grad = True
-	                        z.requires_grad = True
-	                        R.requires_grad = True
-			        r1 = (x - R)**2 + y**2 + z**2
-			        r2 = (x + R)**2 + y**2 + z**2
-			        bIndex1 = torch.where(r1 >= BCcutoff**2)
-			        bIndex2 = torch.where(r2 >= BCcutoff**2)
+			x = 2 * L * torch.rand(n_train, 1) + L
+			y = 2 * L * torch.rand(n_train, 1) + L
+			z = 2 * L * torch.rand(n_train, 1) + L
+			R = (RxL - RxR) * torch.rand(n_train, 1) + RxR
+			r1 = (x - R)**2 + y**2 + z**2
+			r2 = (x + R)**2 + y**2 + z**2
+			x[r1 < cutOff**2] = cutOff
+			x[r2 < cutOff**2] = cutOff
+			x.requires_grad = True
+			y.requires_grad = True
+			z.requires_grad = True
+			R.requires_grad = True
+			r1 = (x - R)**2 + y**2 + z**2
+			r2 = (x + R)**2 + y**2 + z**2
+			bIndex1 = torch.where(r1 >= BCcutoff**2)
+			bIndex2 = torch.where(r2 >= BCcutoff**2)
 		Ltot = model.LossFunctions(x, y, z, R, bIndex1, bIndex2)
 		Ltot.backward(retain_graph=False)
 		print("%.16e" % Ltot.detach().numpy())
 		optimizer.step()
-	print('last learning rate: ', scheduler.get_last_lr())
 
 
 torch.manual_seed(123456)
