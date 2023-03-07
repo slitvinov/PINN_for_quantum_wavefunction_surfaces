@@ -911,7 +911,7 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 lineW = 3
 lineBoxW = 2
 params = set_params()
-params['epochs'] = int(5e3)
+params['epochs'] = 1
 nEpoch1 = params['epochs']
 params['n_train'] = 100000
 params['lr'] = 8e-3
@@ -930,7 +930,7 @@ params['EnergyPath'] = "data/energy_ionH_fineTune.pkl"
 params['saveModelPath'] = "models/ionHsym_fineTune.pt"
 # params['sc_step'] = 10000; params['sc_decay']=.7
 params['sc_sampling'] = 1
-params['epochs'] = int(2e3)
+params['epochs'] = 1
 nEpoch2 = params['epochs']
 params['n_train'] = 100000
 params['lr'] = 5e-4
