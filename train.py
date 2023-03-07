@@ -20,8 +20,7 @@ def set_params():
 	params['Ry'] = 0
 	params['Rz'] = 0
 	params['cutOff'] = 0.005
-	params['lossPath'] = "data/loss_ionH.pkl"
-	params['EnergyPath'] = "data/energy_ionH.pkl"
+	params['lossPath'] = "loss_ionH.pkl"
 	params['saveModelPath'] = "models/ionHsym.pt"
 	params['loadModelPath'] = "models/ionHsym.pt"
 	params['EnrR_path'] = "data/energy_R_ion.pkl"
@@ -332,12 +331,9 @@ params['epochs'] = 1
 nEpoch1 = params['epochs']
 params['n_train'] = 100000
 params['lr'] = 8e-3
-train(params, loadWeights=False);
+train(params, loadWeights=False, freezeUnits=False);
 optEpoch = 3598
-params['loadModelPath'] = "models/ionHsym.pt"
-params['lossPath'] = "data/loss_ionH_fineTune.pkl"
-params['EnergyPath'] = "data/energy_ionH_fineTune.pkl"
-params['saveModelPath'] = "models/ionHsym_fineTune.pt"
+params['lossPath'] = "loss_ionH_fineTune.pkl"
 params['sc_sampling'] = 1
 params['epochs'] = 1
 nEpoch2 = params['epochs']
