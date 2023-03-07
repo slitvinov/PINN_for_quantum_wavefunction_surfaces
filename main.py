@@ -910,21 +910,6 @@ dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
 lineW = 3
 lineBoxW = 2
-font = {'size': 18}
-matplotlib.rc('font', **font)
-plt.rcParams['font.size'] = 28
-plt.rcParams['lines.markersize'] = 12
-plt.rcParams.update({"text.usetex": True})
-if torch.cuda.is_available():
-	device = torch.device("cuda:0")
-	print('Using ', device, ': ', torch.cuda.get_device_name())
-	torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-else:
-	device = torch.device('cpu')
-	torch.set_default_tensor_type('torch.DoubleTensor')
-	print('No GPU found, using cpu')
-# ## Training
-#
 params = set_params()
 params['epochs'] = int(5e3)
 nEpoch1 = params['epochs']
