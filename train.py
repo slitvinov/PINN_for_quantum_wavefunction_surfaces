@@ -10,27 +10,20 @@ def d2(f, x):
 	                           create_graph=True)[0]
 
 
-def hamiltonian(x, y, z, R, psi):
-	r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
-	r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
-	return -0.5 * (d2(psi, x) + d2(psi, y) + d2(psi, z)) - (1 / r1 +
-	                                                        1 / r2) * psi
-
-
-class NN_ion(torch.nn.Module):
+class NN(torch.nn.Module):
 
 	def __init__(self,
 	             dense_neurons=16,
 	             dense_neurons_E=32,
 	             netDecay_neurons=10):
-		super(NN_ion, self).__init__()
-		self.Lin_H1 = torch.nn.Linear(2, dense_neurons)
-		self.Lin_H2 = torch.nn.Linear(dense_neurons, dense_neurons)
-		self.Lin_out = torch.nn.Linear(dense_neurons, 1)
-		self.Lin_E1 = torch.nn.Linear(1, dense_neurons_E)
-		self.Lin_E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
-		self.Lin_Eout = torch.nn.Linear(dense_neurons_E, 1)
-		torch.nn.init.constant_(self.Lin_Eout.bias[0], -1)
+		super(NN, self).__init__()
+		self.H1 = torch.nn.Linear(2, dense_neurons)
+		self.H2 = torch.nn.Linear(dense_neurons, dense_neurons)
+		self.out = torch.nn.Linear(dense_neurons, 1)
+		self.E1 = torch.nn.Linear(1, dense_neurons_E)
+		self.E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
+		self.Eout = torch.nn.Linear(dense_neurons_E, 1)
+		torch.nn.init.constant_(self.Eout.bias[0], -1)
 		self.netDecayL = torch.nn.Linear(1, netDecay_neurons)
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1)
 
@@ -55,21 +48,21 @@ def train():
 			y.requires_grad = True
 			z.requires_grad = True
 			R.requires_grad = True
-			r1 = (x - R)**2 + y**2 + z**2
-			r2 = (x + R)**2 + y**2 + z**2
-			i1 = torch.where(r1 >= BCcutoff**2)
-			i2 = torch.where(r2 >= BCcutoff**2)
-		e = torch.sigmoid(model.Lin_E2(torch.sigmoid(model.Lin_E1(R))))
+			r1sq = (x - R)**2 + y**2 + z**2
+			r2sq = (x + R)**2 + y**2 + z**2
+			i1 = torch.where(r1sq >= BCcutoff**2)
+			i2 = torch.where(r2sq >= BCcutoff**2)
+		e = torch.sigmoid(model.E2(torch.sigmoid(model.E1(R))))
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 		f1 = torch.exp(-r1)
 		f2 = torch.exp(-r2)
 		ff = torch.cat((f1, f2), 1)
-		B = 2 * torch.sigmoid(model.Lin_H2(torch.sigmoid(model.Lin_H1(ff))))
-		f = model.netDecayL(R)
-		f = torch.sigmoid(f)
-		psi = model.Lin_out(B) * model.netDecay(f) + f1 + f2
-		res = hamiltonian(x, y, z, R, psi) - model.Lin_Eout(e) * psi
+		B = 2 * torch.sigmoid(model.H2(torch.sigmoid(model.H1(ff))))
+		f = torch.sigmoid(model.netDecayL(R))
+		psi = model.out(B) * model.netDecay(f) + f1 + f2
+		res = d2(psi, x) + d2(psi, y) + d2(
+		    psi, z) + (model.Eout(e) + 1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
 		print("%.16e" % Ltot.detach().numpy())
@@ -91,7 +84,7 @@ RxR = 4
 sc_decay = .7
 sc_sampling = 1
 sc_step = 3000
-model = NN_ion()
+model = NN()
 
 epochs = 10
 lr = 8e-3
@@ -99,12 +92,12 @@ train()
 
 epochs = 10
 lr = 5e-4
-model.Lin_H1.weight.requires_grad = False
-model.Lin_H1.bias.requires_grad = False
-model.Lin_H2.weight.requires_grad = False
-model.Lin_H2.bias.requires_grad = False
-model.Lin_out.weight.requires_grad = False
-model.Lin_out.bias.requires_grad = False
+model.H1.weight.requires_grad = False
+model.H1.bias.requires_grad = False
+model.H2.weight.requires_grad = False
+model.H2.bias.requires_grad = False
+model.out.weight.requires_grad = False
+model.out.bias.requires_grad = False
 model.netDecayL.weight.requires_grad = False
 model.netDecayL.bias.requires_grad = False
 model.netDecay.weight.requires_grad = False
