@@ -29,9 +29,8 @@ def d2fx(x, f):
 
 
 def radial(x, y, z, R):
-	Rx = R
-	r1 = torch.sqrt((x - Rx)**2 + y**2 + z**2)
-	r2 = torch.sqrt((x + Rx)**2 + y**2 + z**2)
+	r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
+	r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 	return r1, r2
 
 
@@ -48,9 +47,10 @@ def sampling(n_points):
 	y = 2 * L * torch.rand(n_points, 1) + L
 	z = 2 * L * torch.rand(n_points, 1) + L
 	R = (RxL - RxR) * torch.rand(n_points, 1) + RxR
-	r1, r2 = radial(x, y, z, R)
-	x[r1 < cutOff] = cutOff
-	x[r2 < cutOff] = cutOff
+	r1 = (x - R)**2 + y**2 + z**2
+	r2 = (x + R)**2 + y**2 + z**2
+	x[r1 < cutOff**2] = cutOff
+	x[r2 < cutOff**2] = cutOff
 	x, y, z = x.reshape(-1, 1), y.reshape(-1, 1), z.reshape(-1, 1)
 	R = R.reshape(-1, 1)
 	x.requires_grad = True
@@ -77,7 +77,6 @@ class NN_ion(torch.nn.Module):
 		self.Lin_E2 = torch.nn.Linear(dense_neurons_E, dense_neurons_E)
 		self.Lin_Eout = torch.nn.Linear(dense_neurons_E, 1)
 		torch.nn.init.constant_(self.Lin_Eout.bias[0], -1)
-		self.P = inversion_symmetry
 		self.netDecayL = torch.nn.Linear(1, netDecay_neurons, bias=True)
 		self.netDecay = torch.nn.Linear(netDecay_neurons, 1, bias=True)
 
@@ -90,7 +89,7 @@ class NN_ion(torch.nn.Module):
 		fi_r1, fi_r2 = self.atomicUnit(x, y, z, R)
 		fi_r1m, fi_r2m = self.atomicUnit(-x, y, z, R)
 		N_LCAO = self.lcao_solution(fi_r1, fi_r2)
-		B = self.base(fi_r1, fi_r2) + self.P * self.base(fi_r1m, fi_r2m)
+		B = self.base(fi_r1, fi_r2) + self.base(fi_r1m, fi_r2m)
 		NN = self.Lin_out(B)
 		f = self.netDecayL(R)
 		f = self.sig(f)
@@ -109,7 +108,7 @@ class NN_ion(torch.nn.Module):
 		return fi_r1, fi_r2
 
 	def lcao_solution(self, fi_r1, fi_r2):
-		N_LCAO = (fi_r1 + self.P * fi_r2)
+		N_LCAO = (fi_r1 + fi_r2)
 		return N_LCAO
 
 	def base(self, fi_r1, fi_r2):
@@ -153,7 +152,6 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 
 BCcutoff = 17.5
 cutOff = 0.005
-inversion_symmetry = 1
 L = 18
 lr = 8e-3
 n_test = 80
