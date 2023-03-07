@@ -161,19 +161,6 @@ class NN_ion(nn.Module):
 		N, E = self.forward(x, y, z, R)
 		return N, E
 
-	def loadModel(self):
-		checkpoint = torch.load(loadModelPath,
-		                        map_location=torch.device('cpu'))
-		self.load_state_dict(checkpoint['model_state_dict'])
-		self.eval()
-
-	def saveModel(self, optimizer):
-		torch.save(
-		    {
-		        'model_state_dict': self.state_dict(),
-		        'optimizer_state_dict': optimizer.state_dict(),
-		    }, saveModelPath)
-
 	def LossFunctions(self, x, y, z, R, bIndex1, bIndex2):
 		lam_bc, lam_pde = 1, 1  #lam_tr = 1e-9
 		psi, E = self.parametricPsi(x, y, z, R)
@@ -186,22 +173,11 @@ class NN_ion(nn.Module):
 		return Ltot, LossPDE, Lbc, E
 
 
-def train(loadWeights, freezeUnits):
-	model = NN_ion()
+def train():
 	optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
-	print('train with Adam')
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
 	                                            step_size=sc_step,
 	                                            gamma=sc_decay)
-	Llim = 10
-	optEpoch = 0
-	total_epochs = epochs
-	if loadWeights == True:
-		model.loadModel()
-	if freezeUnits == True:
-		print('Freezeing Basis unit and Gate')
-		model.freezeDecayUnit()
-		model.freezeBase()
 	n_points = n_train
 	x, y, z, R = sampling(n_points)
 	r1, r2 = radial(x, y, z, R)
@@ -218,8 +194,6 @@ def train(loadWeights, freezeUnits):
 		                                            bIndex2)
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
-	model.saveModel(optimizer)
-	print('Optimal epoch: ', optEpoch)
 	print('last learning rate: ', scheduler.get_last_lr())
 
 
@@ -248,11 +222,14 @@ yL = -boundaries
 yR = boundaries
 zL = -boundaries
 zR = boundaries
+model = NN_ion()
 
 epochs = 1
 lr = 8e-3
-train(False, False)
+train()
 
 epochs = 1
 lr = 5e-4
-train(True, True)
+model.freezeDecayUnit()
+model.freezeBase()
+train()
