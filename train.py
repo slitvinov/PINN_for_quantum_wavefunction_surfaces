@@ -232,7 +232,7 @@ boundaries = 18
 BCcutoff = 17.5
 cutOff = 0.005
 inversion_symmetry = 1
-loadModelPath = "models/ionHsym.pt"
+loadModelPath = "model.pt"
 lr = 8e-3
 n_test = 80
 n_train = 100000
@@ -240,7 +240,7 @@ RxL = 0.2
 RxR = 4
 Ry = 0
 Rz = 0
-saveModelPath = "models/ionHsym.pt"
+saveModelPath = "model.pt"
 sc_decay = .7
 sc_sampling = 1
 sc_step = 3000
@@ -257,4 +257,4 @@ train(loadWeights=False, freezeUnits=False);
 
 epochs = 1
 lr = 5e-4
-train(loadWeights=True, freezeUnits=True);
+# train(loadWeights=True, freezeUnits=True);
