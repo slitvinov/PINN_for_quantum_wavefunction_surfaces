@@ -1,10 +1,8 @@
 import torch
-import math
-
 
 def ini(*shape):
 	x = torch.empty(shape, requires_grad=True)
-	L = 1 / math.sqrt(shape[0])
+	L = 1 / shape[0]**0.5
 	with torch.no_grad():
 		x.uniform_(-L, L)
 	return x
@@ -24,22 +22,19 @@ def train():
 	for tt in range(epochs):
 		optimizer.zero_grad()
 		if tt % sc_sampling == 0 and tt < 0.9 * epochs:
-			x = 2 * L * torch.rand(n_train, 1) - L
-			y = 2 * L * torch.rand(n_train, 1) - L
-			z = 2 * L * torch.rand(n_train, 1) - L
-			R = (Rhi - Rlo) * torch.rand(n_train, 1) + Rlo
-			r1sq = (x - R)**2 + y**2 + z**2
-			r2sq = (x + R)**2 + y**2 + z**2
-			x[r1sq < cutOff**2] = cutOff
-			x[r2sq < cutOff**2] = cutOff
-			r1sq = (x - R)**2 + y**2 + z**2
-			r2sq = (x + R)**2 + y**2 + z**2
-			i1 = torch.where(r1sq >= BCcutoff**2)
-			i2 = torch.where(r2sq >= BCcutoff**2)
-			x.requires_grad = True
-			y.requires_grad = True
-			z.requires_grad = True
-			R.requires_grad = True
+			with torch.no_grad():
+				x.uniform_(-L, L)
+				y.uniform_(-L, L)
+				z.uniform_(-L, L)
+				R.uniform_(Rlo, Rhi)
+				r1sq = (x - R)**2 + y**2 + z**2
+				r2sq = (x + R)**2 + y**2 + z**2
+				x[r1sq < cutOff**2] = cutOff
+				x[r2sq < cutOff**2] = cutOff
+				r1sq = (x - R)**2 + y**2 + z**2
+				r2sq = (x + R)**2 + y**2 + z**2
+				i1 = torch.where(r1sq >= BCcutoff**2)
+				i2 = torch.where(r2sq >= BCcutoff**2)
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 		f1 = torch.exp(-r1)
@@ -88,19 +83,23 @@ E1b = ini(e)
 E2a = ini(e, e)
 E2b = ini(e)
 E3a = ini(e, 1)
-E3b = -1
+E3b = ini(1)
 L1a = ini(1, l)
 L1b = ini(l)
 L2a = ini(l, 1)
 L2b = ini(1)
+x = torch.empty(n_train, 1, requires_grad=True)
+y = torch.empty(n_train, 1, requires_grad=True)
+z = torch.empty(n_train, 1, requires_grad=True)
+R = torch.empty(n_train, 1, requires_grad=True)
 
-epochs = 11
+epochs = 5000
 lr = 8e-3
 params = (H1a, H1b, H2a, H2b, H3a, H3b, E1a, E1b, E2a, E2b, E3a, L1a, L1b, L2a,
           L2b)
 train()
 
-epochs = 11
+epochs = 5000
 lr = 1e-4
 params = (E1a, E1b, E2a, E2b, E3a)
 train()
