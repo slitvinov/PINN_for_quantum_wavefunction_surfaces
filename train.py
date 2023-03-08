@@ -37,7 +37,7 @@ def train():
 				i2 = torch.where(r2sq >= BCcutoff**2)
 
 		def linear(x, A, b):
-			return x @ A + b
+			return torch.einsum('ij,jk->ik', x, A) + b
 
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
