@@ -17,6 +17,7 @@ def d(f, x):
 	                           grad_outputs=torch.ones(x.shape, dtype=dtype),
 	                           create_graph=True)[0]
 
+
 def train(params, lr, epochs):
 	tt = 0
 	optimizer = torch.optim.Adam(params, lr=lr)
@@ -62,10 +63,10 @@ def train(params, lr, epochs):
 		if tt % 10 == 0:
 			print("%8d: %.3e [%.3e]" % (tt, Ltot.detach().numpy(), Lbest))
 		if tt == epochs:
-                        with torch.no_grad():
-                                for a, b in zip(params, best):
-	                                a.copy_(b)
-                        break
+			with torch.no_grad():
+				for a, b in zip(params, best):
+					a.copy_(b)
+			break
 		tt += 1
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
@@ -104,8 +105,8 @@ x = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 y = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 z = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 R = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
-params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a,
-           E2b, E3a, E3b)
+params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b,
+          E3a, E3b)
 train(params, lr=8e-3, epochs=501)
 train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=501)
 with torch.no_grad():
