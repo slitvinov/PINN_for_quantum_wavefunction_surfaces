@@ -48,7 +48,7 @@ def train():
 		h2 = torch.sigmoid(linear(h1, H2a, H2b))
 		h3 = linear(2 * h2, H3a, H3b)
 		l1 = torch.sigmoid(linear(R, L1a, L1b))
-		l2 = l1 @ L2a + L2b
+		l2 = linear(l1, L2a, L2b)
 		e1 = torch.sigmoid(linear(R, E1a, E1b))
 		e2 = torch.sigmoid(linear(e1, E2a, E2b))
 		e3 = linear(e2, E3a, E3b)
