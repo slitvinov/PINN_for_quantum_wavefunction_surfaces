@@ -11,6 +11,8 @@ from os import path
 import pickle
 from scipy.integrate import simps
 import warnings
+
+
 def set_params():
 	params = dict()
 	boundaries = 18
@@ -321,7 +323,8 @@ class NN_ion(nn.Module):
 		return N, E
 
 	def loadModel(self, params):
-		checkpoint = torch.load(params['loadModelPath'], map_location=torch.device('cpu'))
+		checkpoint = torch.load(params['loadModelPath'],
+		                        map_location=torch.device('cpu'))
 		self.load_state_dict(checkpoint['model_state_dict'])
 		self.eval()
 
@@ -631,6 +634,7 @@ def psiX_norm(Ri, dense_sampling=False, densePoints=200):
 	ps2_LCut = (ps2_L[:, cN]).reshape(-1, 1)
 	return x, psiCut, ps2_LCut
 
+
 # # Hellmann-Feynman theorem
 def hamiltonian_R(x, y, z, R, psi, params):
 	r1, r2 = radial(x, y, z, R, params)
@@ -904,6 +908,7 @@ def plot_EforR(params, Rx_list, plotIntegral=False):
 	plt.tight_layout()
 	# plt.ylim([-2.5,-0.5])
 	plt.savefig('figures/dispersion.jpg', format='jpg')
+
 
 warnings.filterwarnings('ignore')
 dtype = torch.double

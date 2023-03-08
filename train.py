@@ -1,7 +1,8 @@
 import torch
-import itertools
 import math
 
+def ini(*shape):
+        return torch.tensor((2 * torch.rand(shape) - 1) / math.sqrt(shape[0]), requires_grad=True)
 
 def d2(f, x):
 	df = torch.autograd.grad([f], [x],
@@ -39,9 +40,9 @@ def train():
 		f2 = torch.exp(-r2)
 		psi = (
 		    2 * torch.sigmoid(torch.sigmoid(torch.hstack(
-		            (f1, f2)) @ H1a + H1b) @ H2a + H2b) @ H3a + H3b) * L2(torch.sigmoid(L1(R))) + f1 + f2
+		            (f1, f2)) @ H1a + H1b) @ H2a + H2b) @ H3a + H3b) * (torch.sigmoid(R @ L1a + L1b) @ L2a + L2b) + f1 + f2
 		res = d2(psi, x) + d2(psi, y) + d2(
-		    psi, z) + (E3(torch.sigmoid(E2(torch.sigmoid(E1(R))))) + E3b +
+		    psi, z) + (torch.sigmoid(torch.sigmoid(R @ E1a + E1b) @ E2a + E2b) @ E3a + E3b +
 		               1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
@@ -57,36 +58,36 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 BCcutoff = 17.5
 cutOff = 0.005
 L = 18
-n_train = 100000
+n_train = 1000
 RxL = 0.2
 RxR = 3
 sc_sampling = 1
 h = 16
 e = 32
 l = 10
-H1a = torch.zeros(2, h, requires_grad=True)
-H1b = torch.zeros(h, requires_grad=True)
-
-H2a = torch.zeros(h, h, requires_grad=True)
-H2b = torch.zeros(h, requires_grad=True)
-
-H3a = torch.zeros(h, 1, requires_grad=True)
-H3b = torch.zeros(1, requires_grad=True)
-
-E1 = torch.nn.Linear(1, e)
-E2 = torch.nn.Linear(e, e)
-E3 = torch.nn.Linear(e, 1, bias=False)
+H1a = ini(2, h)
+H1b = ini(h)
+H2a = ini(h, h)
+H2b = ini(h)
+H3a = ini(h, 1)
+H3b = ini(1)
+E1a = ini(1, e)
+E1b = ini(e)
+E2a = ini(e, e)
+E2b = ini(e)
+E3a = ini(e, 1)
 E3b = -1
-L1 = torch.nn.Linear(1, l)
-L2 = torch.nn.Linear(l, 1)
+L1a = ini(1, l)
+L1b = ini(l)
+L2a = ini(l, 1)
+L2b = ini(1)
 
-epochs = 11
+epochs = 5000
 lr = 8e-3
-params = itertools.chain([H1a, H1b, H2a, H2b, H3a, H3b], *(params.parameters()
-                           for params in [E1, E2, E3, L1, L2]))
+params = (H1a, H1b, H2a, H2b, H3a, H3b, E1a, E1b, E2a, E2b, E3a, L1a, L1b, L2a, L2b)
 train()
 
-epochs = 11
+epochs = 5000
 lr = 1e-4
-params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
+params = (E1a, E1b, E2a, E2b, E3a)
 train()
