@@ -35,19 +35,23 @@ def train():
 				r2sq = (x + R)**2 + y**2 + z**2
 				i1 = torch.where(r1sq >= BCcutoff**2)
 				i2 = torch.where(r2sq >= BCcutoff**2)
+
+		def linear(x, A, b):
+			return x @ A + b
+
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 		f1 = torch.exp(-r1)
 		f2 = torch.exp(-r2)
 		ff = torch.hstack((f1, f2))
-		h1 = torch.sigmoid(ff @ H1a + H1b)
-		h2 = torch.sigmoid(h1 @ H2a + H2b)
-		h3 = 2 * h2 @ H3a + H3b
-		l1 = torch.sigmoid(R @ L1a + L1b)
+		h1 = torch.sigmoid(linear(ff, H1a, H1b))
+		h2 = torch.sigmoid(linear(h1, H2a, H2b))
+		h3 = linear(2 * h2, H3a, H3b)
+		l1 = torch.sigmoid(linear(R, L1a, L1b))
 		l2 = l1 @ L2a + L2b
-		e1 = torch.sigmoid(R @ E1a + E1b)
-		e2 = torch.sigmoid(e1 @ E2a + E2b)
-		e3 = e2 @ E3a + E3b
+		e1 = torch.sigmoid(linear(R, E1a, E1b))
+		e2 = torch.sigmoid(linear(e1, E2a, E2b))
+		e3 = linear(e2, E3a, E3b)
 		psi = h3 * l2 + f1 + f2
 		res = d2(psi, x) + d2(psi, y) + d2(psi,
 		                                   z) + (e3 + 1 / r1 + 1 / r2) * psi
@@ -92,7 +96,6 @@ x = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 y = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 z = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 R = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
-
 
 params = (H1a, H1b, H2a, H2b, H3a, H3b, E1a, E1b, E2a, E2b, E3a, L1a, L1b, L2a,
           L2b)
