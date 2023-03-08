@@ -107,8 +107,8 @@ z = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 R = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b,
           E3a, E3b)
-train(params, lr=8e-3, epochs=501)
-train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=501)
+train(params, lr=8e-3, epochs=5001)
+train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=5001)
 with torch.no_grad():
 	with open("model.bin", "wb") as file:
 		for x in params:
