@@ -44,13 +44,18 @@ def train():
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 		f1 = torch.exp(-r1)
 		f2 = torch.exp(-r2)
-		psi = (2 * torch.sigmoid(
-		    torch.sigmoid(torch.hstack(
-		        (f1, f2)) @ H1a + H1b) @ H2a + H2b) @ H3a +
-		       H3b) * (torch.sigmoid(R @ L1a + L1b) @ L2a + L2b) + f1 + f2
-		res = d2(psi, x) + d2(psi, y) + d2(psi, z) + (
-		    torch.sigmoid(torch.sigmoid(R @ E1a + E1b) @ E2a + E2b) @ E3a +
-		    E3b + 1 / r1 + 1 / r2) * psi
+		ff = torch.hstack((f1, f2))
+		h1 = torch.sigmoid(ff @ H1a + H1b)
+		h2 = torch.sigmoid(h1 @ H2a + H2b)
+		h3 = 2 * h2 @ H3a + H3b
+		l1 = torch.sigmoid(R @ L1a + L1b)
+		l2 = l1 @ L2a + L2b
+		e1 = torch.sigmoid(R @ E1a + E1b)
+		e2 = torch.sigmoid(e1 @ E2a + E2b)
+		e3 = e2 @ E3a + E3b
+		psi = h3 * l2 + f1 + f2
+		res = d2(psi, x) + d2(psi, y) + d2(psi,
+		                                   z) + (e3 + 1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
