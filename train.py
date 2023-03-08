@@ -37,7 +37,7 @@ def train():
 				i2 = torch.where(r2sq >= BCcutoff**2)
 
 		def linear(x, A, b):
-			return torch.einsum('ij,jk->ik', x, A) + b
+			return torch.einsum('ij,j...->i...', x, A) + b
 
 		r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
@@ -69,7 +69,7 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 BCcutoff = 17.5
 cutOff = 0.005
 L = 18
-n_train = 1000
+n_train = 10000
 Rlo = 0.2
 Rhi = 3
 sc_sampling = 1
@@ -100,11 +100,11 @@ R = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b,
           E3a, E3b)
 optimizer = torch.optim.Adam(params, lr=8e-3)
-epochs = 1001
+epochs = 5001
 train()
 
 optimizer = torch.optim.Adam((E1a, E1b, E2a, E2b, E3a), lr=1e-4)
-epochs = 1001
+epochs = 5001
 train()
 
 with torch.no_grad():
