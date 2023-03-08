@@ -19,7 +19,6 @@ def d2(f, x):
 
 
 def train():
-	optimizer = torch.optim.Adam(params, lr=lr)
 	for tt in range(epochs):
 		optimizer.zero_grad()
 		if tt % sc_sampling == 0 and tt < 0.9 * epochs:
@@ -94,15 +93,15 @@ y = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 z = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 R = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 
-epochs = 11
-lr = 8e-3
+
 params = (H1a, H1b, H2a, H2b, H3a, H3b, E1a, E1b, E2a, E2b, E3a, L1a, L1b, L2a,
           L2b)
+optimizer = torch.optim.Adam(params, lr=8e-3)
+epochs = 11
 train()
 
+optimizer = torch.optim.Adam((E1a, E1b, E2a, E2b, E3a), lr=1e-4)
 epochs = 11
-lr = 1e-4
-params = (E1a, E1b, E2a, E2b, E3a)
 train()
 
 with torch.no_grad():
