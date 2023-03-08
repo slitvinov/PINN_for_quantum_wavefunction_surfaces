@@ -17,8 +17,8 @@ def read():
 			yield np.ndarray(shape, dtype, file.read(size))
 
 
-(H1a, H1b, H2a, H2b, H3a, H3b, E1a, E1b, E2a, E2b, E3a, L1a, L1b, L2a,
- L2b) = read()
+H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b, E3a, E3b = read(
+)
 
 sigmoid = scipy.special.expit
 n = 1000
