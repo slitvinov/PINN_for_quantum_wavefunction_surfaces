@@ -9,7 +9,7 @@ def ini(*shape):
 	return x
 
 
-def d2(f, x):
+def d(f, x):
 	df = torch.autograd.grad([f], [x],
 	                         grad_outputs=torch.ones(x.shape, dtype=dtype),
 	                         create_graph=True)[0]
@@ -17,9 +17,10 @@ def d2(f, x):
 	                           grad_outputs=torch.ones(x.shape, dtype=dtype),
 	                           create_graph=True)[0]
 
-
-def train():
-	for tt in range(epochs):
+def train(params, lr, epochs):
+	tt = 0
+	optimizer = torch.optim.Adam(params, lr=lr)
+	while True:
 		optimizer.zero_grad()
 		if tt % sc_sampling == 0:
 			with torch.no_grad():
@@ -53,23 +54,30 @@ def train():
 		e2 = torch.sigmoid(linear(e1, E2a, E2b))
 		e3 = linear(e2, E3a, E3b)
 		psi = h3 * l2 + f1 + f2
-		res = d2(psi, x) + d2(psi, y) + d2(psi,
-		                                   z) + (e3 + 1 / r1 + 1 / r2) * psi
+		res = d(psi, x) + d(psi, y) + d(psi, z) + (e3 + 1 / r1 + 1 / r2) * psi
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
+		if tt == 0 or Ltot.detach().numpy() < Lbest:
+			Lbest = Ltot.detach().numpy()
+			best = [params.clone().detach() for params in params]
+		if tt % 10 == 0:
+			print("%8d: %.3e [%.3e]" % (tt, Ltot.detach().numpy(), Lbest))
+		if tt == epochs:
+                        with torch.no_grad():
+                                for a, b in zip(params, best):
+	                                a.copy_(b)
+                        break
+		tt += 1
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
-		if tt % 10 == 0:
-			print("%8d: %.8e" % (tt, Ltot.detach().numpy()))
 
 
 torch.manual_seed(123456)
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
-
 BCcutoff = 17.5
 cutOff = 0.005
 L = 18
-n_train = 10000
+n_train = 100000
 Rlo = 0.2
 Rhi = 3
 sc_sampling = 1
@@ -96,17 +104,10 @@ x = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 y = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 z = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 R = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
-
-params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b,
-          E3a, E3b)
-optimizer = torch.optim.Adam(params, lr=8e-3)
-epochs = 5001
-train()
-
-optimizer = torch.optim.Adam((E1a, E1b, E2a, E2b, E3a), lr=1e-4)
-epochs = 5001
-train()
-
+params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a,
+           E2b, E3a, E3b)
+train(params, lr=8e-3, epochs=501)
+train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=501)
 with torch.no_grad():
 	with open("model.bin", "wb") as file:
 		for x in params:
