@@ -21,7 +21,7 @@ def d2(f, x):
 def train():
 	for tt in range(epochs):
 		optimizer.zero_grad()
-		if tt % sc_sampling == 0 and tt < 0.9 * epochs:
+		if tt % sc_sampling == 0:
 			with torch.no_grad():
 				x.uniform_(-L, L)
 				y.uniform_(-L, L)
