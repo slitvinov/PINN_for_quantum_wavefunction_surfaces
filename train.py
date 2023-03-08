@@ -37,9 +37,9 @@ def train():
 		r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
 		f1 = torch.exp(-r1)
 		f2 = torch.exp(-r2)
-		psi = H3(
-		    2 * torch.sigmoid(H2(torch.sigmoid(H1(torch.hstack(
-		        (f1, f2))))))) * L2(torch.sigmoid(L1(R))) + f1 + f2
+		psi = (
+		    2 * torch.sigmoid(torch.sigmoid(torch.hstack(
+		            (f1, f2)) @ H1a + H1b) @ H2a + H2b) @ H3a + H3b) * L2(torch.sigmoid(L1(R))) + f1 + f2
 		res = d2(psi, x) + d2(psi, y) + d2(
 		    psi, z) + (E3(torch.sigmoid(E2(torch.sigmoid(E1(R))))) + E3b +
 		               1 / r1 + 1 / r2) * psi
@@ -64,11 +64,15 @@ sc_sampling = 1
 h = 16
 e = 32
 l = 10
-H1 = torch.nn.Linear(2, h)
-# print(H1.weight, H1.bias)
+H1a = torch.zeros(2, h, requires_grad=True)
+H1b = torch.zeros(h, requires_grad=True)
 
-H2 = torch.nn.Linear(h, h)
-H3 = torch.nn.Linear(h, 1)
+H2a = torch.zeros(h, h, requires_grad=True)
+H2b = torch.zeros(h, requires_grad=True)
+
+H3a = torch.zeros(h, 1, requires_grad=True)
+H3b = torch.zeros(1, requires_grad=True)
+
 E1 = torch.nn.Linear(1, e)
 E2 = torch.nn.Linear(e, e)
 E3 = torch.nn.Linear(e, 1, bias=False)
@@ -78,8 +82,8 @@ L2 = torch.nn.Linear(l, 1)
 
 epochs = 11
 lr = 8e-3
-params = itertools.chain(*(params.parameters()
-                           for params in [H1, H2, H3, E1, E2, E3, L1, L2]))
+params = itertools.chain([H1a, H1b, H2a, H2b, H3a, H3b], *(params.parameters()
+                           for params in [E1, E2, E3, L1, L2]))
 train()
 
 epochs = 11
