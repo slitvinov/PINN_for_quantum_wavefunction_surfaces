@@ -46,7 +46,7 @@ def train():
 		Ltot = (res**2).mean() + (psi[i1]**2).mean() + (psi[i2]**2).mean()
 		Ltot.backward(retain_graph=False)
 		optimizer.step()
-		if tt % 100 == 0:
+		if tt % 10 == 0:
 			print("%8d: %.8e" % (tt, Ltot.detach().numpy()))
 
 
@@ -65,6 +65,8 @@ h = 16
 e = 32
 l = 10
 H1 = torch.nn.Linear(2, h)
+# print(H1.weight, H1.bias)
+
 H2 = torch.nn.Linear(h, h)
 H3 = torch.nn.Linear(h, 1)
 E1 = torch.nn.Linear(1, e)
@@ -74,13 +76,13 @@ E3b = -1
 L1 = torch.nn.Linear(1, l)
 L2 = torch.nn.Linear(l, 1)
 
-epochs = 5000
+epochs = 11
 lr = 8e-3
 params = itertools.chain(*(params.parameters()
                            for params in [H1, H2, H3, E1, E2, E3, L1, L2]))
 train()
 
-epochs = 5000
+epochs = 11
 lr = 1e-4
 params = itertools.chain(*(params.parameters() for params in [E1, E2, E3]))
 train()
