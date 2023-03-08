@@ -103,3 +103,12 @@ epochs = 11
 lr = 1e-4
 params = (E1a, E1b, E2a, E2b, E3a)
 train()
+
+with torch.no_grad():
+        with open("model.bin", "wb") as file:
+                for x in params:
+                        x = x.numpy()
+                        file.write(x.ndim.to_bytes(4, "little"))
+                        for d in x.shape:
+                                file.write(x.ndim.to_bytes(4, "little"))
+                        file.write(x.tobytes())
