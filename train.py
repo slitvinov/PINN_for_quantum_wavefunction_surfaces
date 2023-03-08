@@ -1,7 +1,7 @@
 import torch
 
 def ini(*shape):
-	x = torch.empty(shape, requires_grad=True)
+	x = torch.empty(shape, dtype=dtype, requires_grad=True)
 	L = 1 / shape[0]**0.5
 	with torch.no_grad():
 		x.uniform_(-L, L)
@@ -88,18 +88,18 @@ L1a = ini(1, l)
 L1b = ini(l)
 L2a = ini(l, 1)
 L2b = ini(1)
-x = torch.empty(n_train, 1, requires_grad=True)
-y = torch.empty(n_train, 1, requires_grad=True)
-z = torch.empty(n_train, 1, requires_grad=True)
-R = torch.empty(n_train, 1, requires_grad=True)
+x = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
+y = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
+z = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
+R = torch.empty(n_train, 1, dtype=dtype, requires_grad=True)
 
-epochs = 5000
+epochs = 11
 lr = 8e-3
 params = (H1a, H1b, H2a, H2b, H3a, H3b, E1a, E1b, E2a, E2b, E3a, L1a, L1b, L2a,
           L2b)
 train()
 
-epochs = 5000
+epochs = 11
 lr = 1e-4
 params = (E1a, E1b, E2a, E2b, E3a)
 train()
