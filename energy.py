@@ -2,6 +2,8 @@ import numpy as np
 import scipy.special
 import matplotlib.pylab as plt
 
+def linear(x, A, b):
+    return x @ A + b
 
 def read():
     dtype = np.dtype("float64")
@@ -26,9 +28,8 @@ sigmoid = scipy.special.expit
 n = 1000
 R = np.empty((n, 1))
 R[:, 0] = np.linspace(Rlo, Rhi, n)
-e = sigmoid(R @ E1a + E1b)
-e = sigmoid(e @ E2a + E2b)
-e = e @ E3a + E3b
-E = e + 2 / R
-plt.plot(R[:, 0], E[:, 0], 'b')
+e = sigmoid(linear(R, E1a, E1b))
+e = sigmoid(linear(e, E2a, E2b))
+e = linear(e, E3a, E3b)
+plt.plot(R[:, 0], e[:, 0]  + 1/(2 * R[:, 0]), 'b')
 plt.savefig("energy.png")

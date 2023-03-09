@@ -52,16 +52,16 @@ def train(params, lr, epochs):
         e = linear(e, E3a, E3b)
         psi = f1 + f2 + h * l
         res = d(psi, x) + d(psi, y) + d(psi, z) + (e + 1 / r1 + 1 / r2) * psi
-        Lpde = (res**2).mean()
-        Lbc = (psi[i1, 0]**2).mean() + (psi[i2, 0]**2).mean()
+        Lpde = torch.mean(res**2)
+        Lbc = torch.mean(psi[i1, 0]**2) + torch.mean(psi[i2, 0]**2)
         Ltot = Lpde + Lbc
         if tt == 0 or Ltot.detach().numpy() < Lbest:
             Lbest = Ltot.detach().numpy()
             best = [params.clone().detach() for params in params]
-        if tt % 1 == 0:
-            print("%8d: %.2e %.2e %.2e [%.5e]" %
-                  (tt, Ltot.detach().numpy(), Lpde.detach().numpy(),
-                   Lbc.detach().numpy(), Lbest))
+        if tt % 10 == 0:
+            print("%8d: %.2e %.2e %.2e (%.2e) [%.5e]" %
+                  (tt, *[e.detach().numpy()
+                         for e in (Ltot, Lpde, Lbc, torch.mean(e))], Lbest))
         if tt == epochs:
             with torch.no_grad():
                 for a, b in zip(params, best):
@@ -107,8 +107,8 @@ z = torch.empty(n, 1, dtype=dtype, requires_grad=True)
 R = torch.empty(n, 1, dtype=dtype)
 params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b,
           E3a, E3b)
-train(params, lr=8e-3, epochs=1)
-train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=1)
+train(params, lr=8e-3, epochs=1000)
+# train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=1000)
 with torch.no_grad():
     with open("model.bin", "wb") as file:
         for x in params:
