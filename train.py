@@ -1,5 +1,7 @@
 import torch
 
+def linear(x, A, b):
+        return x @ A + b
 
 def d(f, x):
     df, = torch.autograd.grad(torch.sum(f), x, create_graph=True)
@@ -27,19 +29,12 @@ def train(params, lr, epochs):
                 R.uniform_(Rlo, Rhi)
                 r1sq = (x - R)**2 + y**2 + z**2
                 r2sq = (x + R)**2 + y**2 + z**2
-                x[r1sq < cutOff**2] = cutOff
-                x[r2sq < cutOff**2] = cutOff
+                x[r1sq < cutoff**2] = cutoff
+                x[r2sq < cutoff**2] = cutoff
                 r1sq = (x - R)**2 + y**2 + z**2
                 r2sq = (x + R)**2 + y**2 + z**2
-                print(r1sq.shape)
-                i1 = torch.where(r1sq[:, 0] >= BCcutoff**2)
-                i2 = torch.where(r2sq[:, 0] >= BCcutoff**2)
-                print(i1)
-                print(len(i1), len(i2), n)
-                sys.exit(0)
-
-        def linear(x, A, b):
-            return x @ A + b
+                i1, = torch.where(r1sq[:, 0] >= bcutoff**2)
+                i2, = torch.where(r2sq[:, 0] >= bcutoff**2)
 
         r1 = torch.sqrt((x - R)**2 + y**2 + z**2)
         r2 = torch.sqrt((x + R)**2 + y**2 + z**2)
@@ -56,7 +51,7 @@ def train(params, lr, epochs):
         psi = f1 + f2 + h * l
         res = d(psi, x) + d(psi, y) + d(psi, z) + (e + 1 / r1 + 1 / r2) * psi
         Lpde = (res**2).mean()
-        Lbc = (psi[i1]**2).mean() + (psi[i2]**2).mean()
+        Lbc = (psi[i1, 0]**2).mean() + (psi[i2, 0]**2).mean()
         Ltot = Lpde + Lbc
         if tt == 0 or Ltot.detach().numpy() < Lbest:
             Lbest = Ltot.detach().numpy()
@@ -78,13 +73,13 @@ def train(params, lr, epochs):
 torch.manual_seed(12345)
 dtype = torch.double
 torch.set_default_tensor_type('torch.DoubleTensor')
-BCcutoff = 17.5
-cutOff = 0.005
+bcutoff = 17.5
+cutoff = 0.005
 L = 18
 n = 10000
 Rlo = 0.2
 Rhi = 3
-sc_sampling = 99999999
+sc_sampling = 1
 nh = 16
 ne = 32
 nl = 10
@@ -110,8 +105,8 @@ z = torch.empty(n, 1, dtype=dtype, requires_grad=True)
 R = torch.empty(n, 1, dtype=dtype)
 params = (H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b,
           E3a, E3b)
-train(params, lr=8e-3, epochs=10000)
-train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=10000)
+train(params, lr=8e-3, epochs=1)
+train((E1a, E1b, E2a, E2b, E3a, E3b), lr=1e-4, epochs=1)
 with torch.no_grad():
     with open("model.bin", "wb") as file:
         for x in params:

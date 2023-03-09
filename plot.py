@@ -16,9 +16,13 @@ def read():
             size = np.product(shape) * dtype.itemsize
             yield np.ndarray(shape, dtype, file.read(size))
 
+def linear(x, A, b):
+    return x @ A + b
+            
 
 H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b, E3a, E3b = read(
 )
+
 
 sigmoid = scipy.special.expit
 for R0, path_plot, path_diff in (1, "R1.png", "R1e.png"), (2, "R2.png",
@@ -33,13 +37,16 @@ for R0, path_plot, path_diff in (1, "R1.png", "R1e.png"), (2, "R2.png",
     r2 = np.sqrt((x + R)**2 + y**2 + z**2)
     f1 = np.exp(-r1)
     f2 = np.exp(-r2)
-    ff = np.hstack((f1, f2))
-    h1 = sigmoid(ff @ H1a + H1b)
-    h2 = sigmoid(h1 @ H2a + H2b)
-    h3 = 2 * h2 @ H3a + H3b
-    l1 = sigmoid(R @ L1a + L1b)
-    l2 = l1 @ L2a + L2b
-    psi = h3 * l2 + f1 + f2
+    h = sigmoid(linear(np.hstack((f1, f2)), H1a, H1b))
+    h = sigmoid(linear(h, H2a, H2b))
+    h = linear(2 * h, H3a, H3b)
+    l = sigmoid(linear(R, L1a, L1b))
+    l = linear(l, L2a, L2b)
+    e = sigmoid(linear(R, E1a, E1b))
+    e = sigmoid(linear(e, E2a, E2b))
+    e = linear(e, E3a, E3b)
+    psi = f1 + f2 + h * l
+    psi = h * l + f1 + f2
     psi_lcao = f1 + f2
     plt.plot(x[:, 0], psi[:, 0], 'b')
     plt.plot(x[:, 0], psi_lcao[:, 0], 'r')
