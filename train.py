@@ -1,7 +1,9 @@
 import torch
 
+
 def linear(x, A, b):
-        return x @ A + b
+    return x @ A + b
+
 
 def d(f, x):
     df, = torch.autograd.grad(torch.sum(f), x, create_graph=True)

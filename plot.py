@@ -16,13 +16,13 @@ def read():
             size = np.product(shape) * dtype.itemsize
             yield np.ndarray(shape, dtype, file.read(size))
 
+
 def linear(x, A, b):
     return x @ A + b
-            
+
 
 H1a, H1b, H2a, H2b, H3a, H3b, L1a, L1b, L2a, L2b, E1a, E1b, E2a, E2b, E3a, E3b = read(
 )
-
 
 sigmoid = scipy.special.expit
 for R0, path_plot, path_diff in (1, "R1.png", "R1e.png"), (2, "R2.png",
